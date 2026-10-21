@@ -33,3 +33,6 @@ __pycache__/
 .venv/
 Thumbs.db
 Desktop.ini
+
+# ignore
+.ignore/
