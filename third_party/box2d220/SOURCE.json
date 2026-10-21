@@ -1,0 +1,566 @@
+{
+  "version": "2.2.0",
+  "native_version_evidence": "libBeansQuest.so: b2_version = 2,2,0; WorldToPhysicsScale = 1/64",
+  "url": "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/box2d/Box2D_v2.2.0.zip",
+  "archive_sha256": "1b298d30d8eb562fbe2a16cf16a6ec0ffc85688b13d4c0a490850c0eac6b9f31",
+  "files": [
+    {
+      "file": "Box2D/Box2D.h",
+      "upstream_sha256": "2e413629138c9fba13d5a049cd23ad79e427399e1fa26f72026b70fb21707b4a",
+      "local_sha256": "2e413629138c9fba13d5a049cd23ad79e427399e1fa26f72026b70fb21707b4a",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Box2DConfig.cmake",
+      "upstream_sha256": "a0fc8b171cba3f6aa47067833b060b2d78ec50a48f85ddbe8095fb41f49dbf85",
+      "local_sha256": "a0fc8b171cba3f6aa47067833b060b2d78ec50a48f85ddbe8095fb41f49dbf85",
+      "modified": false
+    },
+    {
+      "file": "Box2D/CMakeLists.txt",
+      "upstream_sha256": "8ba1bf605233bf3bdb80e035881c1017e74fae62b465768d4612be07ed4a3cd3",
+      "local_sha256": "8ba1bf605233bf3bdb80e035881c1017e74fae62b465768d4612be07ed4a3cd3",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2BroadPhase.cpp",
+      "upstream_sha256": "f554bf8df8d0b4fc35984805b57e98c925a7aa4d690086d6e3fc80fd79bb52d1",
+      "local_sha256": "f554bf8df8d0b4fc35984805b57e98c925a7aa4d690086d6e3fc80fd79bb52d1",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2BroadPhase.h",
+      "upstream_sha256": "7c8318877dba93ff7a2668f0f901467b77c024e46591de8ed579a5f704688e8e",
+      "local_sha256": "325ff81b2debd98a686b42c94268db71c476d7c42dcab0efa8f0b816b869b211",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Collision/b2CollideCircle.cpp",
+      "upstream_sha256": "5dfcd61dfcf6f669e9dfa0dac848e316c1754ad5c2c47660b87458f6cff51bc4",
+      "local_sha256": "5dfcd61dfcf6f669e9dfa0dac848e316c1754ad5c2c47660b87458f6cff51bc4",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2CollideEdge.cpp",
+      "upstream_sha256": "2e9c5f53b5a615ff53fbaca2f5d6df583ecf29e07d400f55389608079aab9bd6",
+      "local_sha256": "2e9c5f53b5a615ff53fbaca2f5d6df583ecf29e07d400f55389608079aab9bd6",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2CollidePolygon.cpp",
+      "upstream_sha256": "57c31c002e99fb9addd551d30880c8b11350b6844dbd7bdba08bc54c99ce3e7e",
+      "local_sha256": "57c31c002e99fb9addd551d30880c8b11350b6844dbd7bdba08bc54c99ce3e7e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2Collision.cpp",
+      "upstream_sha256": "91a6ae89df510691a94466ff1ec24187de6bdf50e718f827596678ae5a2a4648",
+      "local_sha256": "91a6ae89df510691a94466ff1ec24187de6bdf50e718f827596678ae5a2a4648",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2Collision.h",
+      "upstream_sha256": "a7dc5787c39b9f7784c985559abe8d0cb291f47558b17987145125d0c611c530",
+      "local_sha256": "a7dc5787c39b9f7784c985559abe8d0cb291f47558b17987145125d0c611c530",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2Distance.cpp",
+      "upstream_sha256": "ab342fb692f70f831b162d2ad9287ccfe75745b2fb9da26757fbbf0c81f6fde3",
+      "local_sha256": "ab342fb692f70f831b162d2ad9287ccfe75745b2fb9da26757fbbf0c81f6fde3",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2Distance.h",
+      "upstream_sha256": "f7d212f116ee40f936f88352eecae54767bd09471df9a0f255eb88d26ed0e74e",
+      "local_sha256": "f7d212f116ee40f936f88352eecae54767bd09471df9a0f255eb88d26ed0e74e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2DynamicTree.cpp",
+      "upstream_sha256": "4290f60431e4c1536b6a8c7d5d6c15a0103f9104520ed1c2bd32decd0a899b99",
+      "local_sha256": "4290f60431e4c1536b6a8c7d5d6c15a0103f9104520ed1c2bd32decd0a899b99",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2DynamicTree.h",
+      "upstream_sha256": "8f5c5dba25d0eac152142962ce6dbb292fc6ae280587c999c24e22733efc6260",
+      "local_sha256": "8f5c5dba25d0eac152142962ce6dbb292fc6ae280587c999c24e22733efc6260",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2TimeOfImpact.cpp",
+      "upstream_sha256": "018fd4a1459baca5c3adcaff34b6294816281a209162b693d4a2c87bf3d1bb4f",
+      "local_sha256": "018fd4a1459baca5c3adcaff34b6294816281a209162b693d4a2c87bf3d1bb4f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/b2TimeOfImpact.h",
+      "upstream_sha256": "ffba7c628e8f75ea3f56780b824c0812f64830d38413ba72d3c0ff03c1b1a2e3",
+      "local_sha256": "ffba7c628e8f75ea3f56780b824c0812f64830d38413ba72d3c0ff03c1b1a2e3",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2ChainShape.cpp",
+      "upstream_sha256": "fdee0c3abbb9f8645cbf9144d0ae52df63a11e1e5b571d42b06ca504f95dd524",
+      "local_sha256": "fdee0c3abbb9f8645cbf9144d0ae52df63a11e1e5b571d42b06ca504f95dd524",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2ChainShape.h",
+      "upstream_sha256": "86f0676b2ac499e0cf426c0453cd3ab53b44764792611b56552d85408bf9f5c8",
+      "local_sha256": "86f0676b2ac499e0cf426c0453cd3ab53b44764792611b56552d85408bf9f5c8",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2CircleShape.cpp",
+      "upstream_sha256": "6506279f95f1665e619ad270a9d1fcf4286b2019f74414cc07b8132d066e23e2",
+      "local_sha256": "6506279f95f1665e619ad270a9d1fcf4286b2019f74414cc07b8132d066e23e2",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2CircleShape.h",
+      "upstream_sha256": "09038c028b97c0f4a98486e95c93ba2c050c3117ed62fde3f02cfd2184b9c463",
+      "local_sha256": "09038c028b97c0f4a98486e95c93ba2c050c3117ed62fde3f02cfd2184b9c463",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2EdgeShape.cpp",
+      "upstream_sha256": "8e17f6d6c0e93a456b3a5362adc92954f638327bbc32e579d7ec7bc666557beb",
+      "local_sha256": "8e17f6d6c0e93a456b3a5362adc92954f638327bbc32e579d7ec7bc666557beb",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2EdgeShape.h",
+      "upstream_sha256": "6b396471b977b12f901939804e996bb61522b8e189a3060badcc316e77c40f3f",
+      "local_sha256": "6b396471b977b12f901939804e996bb61522b8e189a3060badcc316e77c40f3f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2PolygonShape.cpp",
+      "upstream_sha256": "6ba615e82ef77e190b9ffa32942f413af85b9a68de859c801eb4f437b47a97f0",
+      "local_sha256": "6ba615e82ef77e190b9ffa32942f413af85b9a68de859c801eb4f437b47a97f0",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2PolygonShape.h",
+      "upstream_sha256": "61bc5dda682a0143fd3a310f8d26082ebfaace4967e3c2f6eef881ff5246e49c",
+      "local_sha256": "61bc5dda682a0143fd3a310f8d26082ebfaace4967e3c2f6eef881ff5246e49c",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Collision/Shapes/b2Shape.h",
+      "upstream_sha256": "dc498d3688c19fecb02eff072b7e0d92ff66bf6f801e64413c772ef8ea157540",
+      "local_sha256": "dc498d3688c19fecb02eff072b7e0d92ff66bf6f801e64413c772ef8ea157540",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2BlockAllocator.cpp",
+      "upstream_sha256": "c5bf8d1e2d542bb4707a018988435570419aad7a6cdee66806a701d7d151fe04",
+      "local_sha256": "c5bf8d1e2d542bb4707a018988435570419aad7a6cdee66806a701d7d151fe04",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2BlockAllocator.h",
+      "upstream_sha256": "91fa8e7a0b18af2352844fd166dc6e0e065fbce0819ae4ca6bfcf0cf10a08846",
+      "local_sha256": "91fa8e7a0b18af2352844fd166dc6e0e065fbce0819ae4ca6bfcf0cf10a08846",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2Draw.cpp",
+      "upstream_sha256": "6789e7ee5232275ad159cd8f03a5597ae7847fd16e6110fd56be14d2e99121d0",
+      "local_sha256": "6789e7ee5232275ad159cd8f03a5597ae7847fd16e6110fd56be14d2e99121d0",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2Draw.h",
+      "upstream_sha256": "088e7bdde627f5ba3699d6e1441c20aeefc3b7e00a34989b6aaa03606c6f5eda",
+      "local_sha256": "088e7bdde627f5ba3699d6e1441c20aeefc3b7e00a34989b6aaa03606c6f5eda",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2GrowableStack.h",
+      "upstream_sha256": "caaefccb01807dafa694d03dc33226155f595a9c64e81aefa9c06eba739de53b",
+      "local_sha256": "caaefccb01807dafa694d03dc33226155f595a9c64e81aefa9c06eba739de53b",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2Math.cpp",
+      "upstream_sha256": "dbe036ead535cc4df0d03dc3717a94b6f404bebb220f487868cdb59359c03320",
+      "local_sha256": "dbe036ead535cc4df0d03dc3717a94b6f404bebb220f487868cdb59359c03320",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2Math.h",
+      "upstream_sha256": "517dac7dc2c51b7381574a41171e578c118b3eef484fc5dd76bbd090e028f656",
+      "local_sha256": "d4fd9bfbb76504bf18fc5c601b2d925c20808f0c3dcc60f3fd451bea2e7ce1fb",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Common/b2Settings.cpp",
+      "upstream_sha256": "239f9f08c7f413b2d685ac1d333c1ef466231310542c44cdd626881faf2a5237",
+      "local_sha256": "e80debecd1944bdc8a82b9c5e75bddea0bf247e5d46dda591b42fe995515718a",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Common/b2Settings.h",
+      "upstream_sha256": "d8c7fbb5952a72f9c7a10c5e328dda9d00205bba72c7f0168959e0f7fe299939",
+      "local_sha256": "d8c7fbb5952a72f9c7a10c5e328dda9d00205bba72c7f0168959e0f7fe299939",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2StackAllocator.cpp",
+      "upstream_sha256": "5857a46837c3f204a20adeaf453b7e3d5ab126467d24db21b0e3216ca402c8c6",
+      "local_sha256": "5857a46837c3f204a20adeaf453b7e3d5ab126467d24db21b0e3216ca402c8c6",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2StackAllocator.h",
+      "upstream_sha256": "61b45e11b08c3f85aa37cfe2ac25f409f602a94196f77dd5728603696f93cfff",
+      "local_sha256": "61b45e11b08c3f85aa37cfe2ac25f409f602a94196f77dd5728603696f93cfff",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Common/b2Timer.cpp",
+      "upstream_sha256": "0a7e6f6415ce196c46cbcca1cefdf8254004b63d93f225a1eb775a8e60dce3f1",
+      "local_sha256": "c3365f80a1bdf5b4fa1c39386ba753b960b5b9fc656e7054ed32cd97817fec1f",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Common/b2Timer.h",
+      "upstream_sha256": "9fc808a2318fed61aa6858ad2b995655d0ab65c8a621f7ef83c1cefe1cabc336",
+      "local_sha256": "00bc3c8a8d9563fbbcb0e82c81fd77b028fd054635d7707cec0533e615cd7c2c",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Dynamics/b2Body.cpp",
+      "upstream_sha256": "9be056e6782f44a0dfe9278097b413f123682618894893156ec234164761aaa8",
+      "local_sha256": "9be056e6782f44a0dfe9278097b413f123682618894893156ec234164761aaa8",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2Body.h",
+      "upstream_sha256": "624a88cd6ffb84348b0868c72be946d9bad2c448c34c43ed3b4495f30d462fb5",
+      "local_sha256": "9a8cfb959007b0148df33fa2a1452f14fa1152287bb0e6dc160739dbe6547dc6",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Dynamics/b2ContactManager.cpp",
+      "upstream_sha256": "dee4c203e747af66b5d7da4c69fdea8392373bf15c74c34ee31f52bb3e4a3a9d",
+      "local_sha256": "dee4c203e747af66b5d7da4c69fdea8392373bf15c74c34ee31f52bb3e4a3a9d",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2ContactManager.h",
+      "upstream_sha256": "2a5e91213d19c06f0f8465a12ef5205cd944b9d4401dafed66f14f7b9dc2a6a8",
+      "local_sha256": "2a5e91213d19c06f0f8465a12ef5205cd944b9d4401dafed66f14f7b9dc2a6a8",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2Fixture.cpp",
+      "upstream_sha256": "6ca52ca2599a91421076f29f9116f7a2ab17b97a404cf26e57196daf38decb67",
+      "local_sha256": "6ca52ca2599a91421076f29f9116f7a2ab17b97a404cf26e57196daf38decb67",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2Fixture.h",
+      "upstream_sha256": "42ac9810d14083366f77375bb79274665c5ad61c82359b52c1e05b0affa0869f",
+      "local_sha256": "42ac9810d14083366f77375bb79274665c5ad61c82359b52c1e05b0affa0869f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2Island.cpp",
+      "upstream_sha256": "3eba3391cb4a26c827e784854a8c6a5d5b0981991ced6873193c276ab6dfebe3",
+      "local_sha256": "a0120796b9a7801e25c4abb54566e1dff227d12cfe19d646cce6312c9e14ee12",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Dynamics/b2Island.h",
+      "upstream_sha256": "325ecf9823ab8fdb0e5ad485315a45cf028db0bb28b7ddd7bf2dcd518d825d6f",
+      "local_sha256": "325ecf9823ab8fdb0e5ad485315a45cf028db0bb28b7ddd7bf2dcd518d825d6f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2TimeStep.h",
+      "upstream_sha256": "d38f6c3841d6fb0f6712d2ddb640d86ff0d3144c23c74e7f039afe09f558665e",
+      "local_sha256": "d38f6c3841d6fb0f6712d2ddb640d86ff0d3144c23c74e7f039afe09f558665e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2World.cpp",
+      "upstream_sha256": "4f700a354e6accba521df20ebfae0cc50c04912cf6034364da4d697e56f6fb17",
+      "local_sha256": "4f700a354e6accba521df20ebfae0cc50c04912cf6034364da4d697e56f6fb17",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2World.h",
+      "upstream_sha256": "ec422f1d5ecfad6f8aae95d566694c08aa39a96421dfdf9c46f225a43294484c",
+      "local_sha256": "ec422f1d5ecfad6f8aae95d566694c08aa39a96421dfdf9c46f225a43294484c",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2WorldCallbacks.cpp",
+      "upstream_sha256": "edaffce9fc1802baaaafff624ea2391866e7a920245f8a06656415b9e8bc0dca",
+      "local_sha256": "edaffce9fc1802baaaafff624ea2391866e7a920245f8a06656415b9e8bc0dca",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/b2WorldCallbacks.h",
+      "upstream_sha256": "0cbfbf342c32e4445170d96b3ba8bb60ef520458461705fdedb5055f247a5d6d",
+      "local_sha256": "0cbfbf342c32e4445170d96b3ba8bb60ef520458461705fdedb5055f247a5d6d",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ChainAndCircleContact.cpp",
+      "upstream_sha256": "8daff3207cec7ee9be9baf59c0433fd9b3c3b7cbd152a28e63bf2a748c2ee480",
+      "local_sha256": "8daff3207cec7ee9be9baf59c0433fd9b3c3b7cbd152a28e63bf2a748c2ee480",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ChainAndCircleContact.h",
+      "upstream_sha256": "0b90a01e2fdc3cbeed38106dd9792c414faacf3363183193d9855d6fd9735b39",
+      "local_sha256": "0b90a01e2fdc3cbeed38106dd9792c414faacf3363183193d9855d6fd9735b39",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ChainAndPolygonContact.cpp",
+      "upstream_sha256": "e7cc42f1147e7b625c05d0f535209b09faffd6a3286c793dad0d24cf52d2c952",
+      "local_sha256": "e7cc42f1147e7b625c05d0f535209b09faffd6a3286c793dad0d24cf52d2c952",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ChainAndPolygonContact.h",
+      "upstream_sha256": "5c2e18475fbeb062e6a964a41ef385ddaed886323653a4362cb524a454e6c33e",
+      "local_sha256": "5c2e18475fbeb062e6a964a41ef385ddaed886323653a4362cb524a454e6c33e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2CircleContact.cpp",
+      "upstream_sha256": "a00d38ec29ea46722576bdcc35899ecc2223c61966c6c0cb179bc21f25f48df0",
+      "local_sha256": "a00d38ec29ea46722576bdcc35899ecc2223c61966c6c0cb179bc21f25f48df0",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2CircleContact.h",
+      "upstream_sha256": "a4c04f12906abe31b02e92cc29f3cc7b5d5bf3d5acc02d52876778e7d89ed661",
+      "local_sha256": "a4c04f12906abe31b02e92cc29f3cc7b5d5bf3d5acc02d52876778e7d89ed661",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2Contact.cpp",
+      "upstream_sha256": "80af0c631fedac3a93c963cf0aec17d5502724a78c099c73383e236b8a754f8b",
+      "local_sha256": "80af0c631fedac3a93c963cf0aec17d5502724a78c099c73383e236b8a754f8b",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2Contact.h",
+      "upstream_sha256": "d2a0f1949bd8f6f0d4dafb972806dadf653e019ced8282e89867165495970029",
+      "local_sha256": "7668151fb2e8b78339338c64afc1756a0374754bc902cceacc9b8b6b14269f6a",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ContactSolver.cpp",
+      "upstream_sha256": "8014be5e52dfc9487f422e1fbbcab86176dfcb9c2ff6dc88c5ea877704456c68",
+      "local_sha256": "82d132a712e5ae55411b5c222d17bf3b4b1d61f803e41fa4dc6ca61b8923dcc9",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2ContactSolver.h",
+      "upstream_sha256": "5b2a6e322f43daa15996de9291c009021ff20f5164c115ef2c821bdb8814f54f",
+      "local_sha256": "5b2a6e322f43daa15996de9291c009021ff20f5164c115ef2c821bdb8814f54f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2EdgeAndCircleContact.cpp",
+      "upstream_sha256": "970ab626296d71e070a694a4ebce25919acc5cccefbd2db06bc834849b0c9841",
+      "local_sha256": "970ab626296d71e070a694a4ebce25919acc5cccefbd2db06bc834849b0c9841",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2EdgeAndCircleContact.h",
+      "upstream_sha256": "33b4b76cac8dcd57b47c1ed257ea8839156633f2c50546dec33f1286da68231e",
+      "local_sha256": "33b4b76cac8dcd57b47c1ed257ea8839156633f2c50546dec33f1286da68231e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2EdgeAndPolygonContact.cpp",
+      "upstream_sha256": "3cd3cabce6d9aae1d772bf848a0d4545548c47821634f405389fb66d799d09c5",
+      "local_sha256": "3cd3cabce6d9aae1d772bf848a0d4545548c47821634f405389fb66d799d09c5",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2EdgeAndPolygonContact.h",
+      "upstream_sha256": "a884500161f4373623703f8a8124a02b1a9dc6d2c12275076a0df9ac425ee9dc",
+      "local_sha256": "a884500161f4373623703f8a8124a02b1a9dc6d2c12275076a0df9ac425ee9dc",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2PolygonAndCircleContact.cpp",
+      "upstream_sha256": "97b2eceeeb53e1cfe660c7a74d14dd21f5f1e2b6e2d858a742b8a4fb882e8637",
+      "local_sha256": "97b2eceeeb53e1cfe660c7a74d14dd21f5f1e2b6e2d858a742b8a4fb882e8637",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2PolygonAndCircleContact.h",
+      "upstream_sha256": "a8cb933088e5ebeac50ba52407dc120dcd6f855fab786290f2aa2177c51035b9",
+      "local_sha256": "a8cb933088e5ebeac50ba52407dc120dcd6f855fab786290f2aa2177c51035b9",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2PolygonContact.cpp",
+      "upstream_sha256": "a7f1c5e27735debff103c1bcf6aca19d359a40347afff89269a5efb6e7fbc4ff",
+      "local_sha256": "a7f1c5e27735debff103c1bcf6aca19d359a40347afff89269a5efb6e7fbc4ff",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Contacts/b2PolygonContact.h",
+      "upstream_sha256": "c69e139a9bc3f8ff06726e865fdf44b8629b67a3898d04611c69e66515871378",
+      "local_sha256": "c69e139a9bc3f8ff06726e865fdf44b8629b67a3898d04611c69e66515871378",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2DistanceJoint.cpp",
+      "upstream_sha256": "bea47162e79aa1e404ff9a5ca8efe7868978725ea23692f2c8d398fe33031531",
+      "local_sha256": "bea47162e79aa1e404ff9a5ca8efe7868978725ea23692f2c8d398fe33031531",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2DistanceJoint.h",
+      "upstream_sha256": "4e50e6ba069eb77e135affd71263f88ede484668f8ee8e956aa5f958aa2451be",
+      "local_sha256": "4e50e6ba069eb77e135affd71263f88ede484668f8ee8e956aa5f958aa2451be",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2FrictionJoint.cpp",
+      "upstream_sha256": "5089deee49cba2e9f148b70d2a7bc031388a2e2a6507d96f8e4da51f2e01b541",
+      "local_sha256": "5089deee49cba2e9f148b70d2a7bc031388a2e2a6507d96f8e4da51f2e01b541",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2FrictionJoint.h",
+      "upstream_sha256": "849df60fd0d8a6b08fe20a9b0cce3ef3fbfb3796173f792096f8eb52573ad49e",
+      "local_sha256": "849df60fd0d8a6b08fe20a9b0cce3ef3fbfb3796173f792096f8eb52573ad49e",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2GearJoint.cpp",
+      "upstream_sha256": "dd68cb91826728e98a474bd6dd25bc499c9be225974d59427f59a9138d55ccaf",
+      "local_sha256": "dd68cb91826728e98a474bd6dd25bc499c9be225974d59427f59a9138d55ccaf",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2GearJoint.h",
+      "upstream_sha256": "f07155c3d26aae423946733353b76ae10dcb75def186db79a79fd6da700c8e5d",
+      "local_sha256": "f07155c3d26aae423946733353b76ae10dcb75def186db79a79fd6da700c8e5d",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2Joint.cpp",
+      "upstream_sha256": "519c1b2d7c28c523b6f59d2d123ecfa38f58459530e774c1e993fb251034b2fa",
+      "local_sha256": "519c1b2d7c28c523b6f59d2d123ecfa38f58459530e774c1e993fb251034b2fa",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2Joint.h",
+      "upstream_sha256": "09c66d3c11c51e2d07aa86c2a749648bfb93b457427884983187b9d64e8a4713",
+      "local_sha256": "09c66d3c11c51e2d07aa86c2a749648bfb93b457427884983187b9d64e8a4713",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2MouseJoint.cpp",
+      "upstream_sha256": "f8a7105eafe53c17d5a92aebd46a2d5d60df6e75a3706f42d0a500429909b4b0",
+      "local_sha256": "f8a7105eafe53c17d5a92aebd46a2d5d60df6e75a3706f42d0a500429909b4b0",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2MouseJoint.h",
+      "upstream_sha256": "d43b40b07766d0aa5c2439671d1a41061fc607ec3af882cd9c99fa2339dd4c07",
+      "local_sha256": "d43b40b07766d0aa5c2439671d1a41061fc607ec3af882cd9c99fa2339dd4c07",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2PrismaticJoint.cpp",
+      "upstream_sha256": "79ffe5a106aa3d64f871e09e46aa5aae266c004d9bcb6b4009dd6f2b5dd39e74",
+      "local_sha256": "79ffe5a106aa3d64f871e09e46aa5aae266c004d9bcb6b4009dd6f2b5dd39e74",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2PrismaticJoint.h",
+      "upstream_sha256": "69d1a278a83a27780cee6c841737fbbf80755d37bc71954f4093f1b27bc2ec8b",
+      "local_sha256": "69d1a278a83a27780cee6c841737fbbf80755d37bc71954f4093f1b27bc2ec8b",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2PulleyJoint.cpp",
+      "upstream_sha256": "593e93149dff3a77660caa6fec5e9300e402cfb8d82b070dc3cff069dcd8df0a",
+      "local_sha256": "593e93149dff3a77660caa6fec5e9300e402cfb8d82b070dc3cff069dcd8df0a",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2PulleyJoint.h",
+      "upstream_sha256": "7a8073a2ea00aaf14f3559a94fe67b708c96dd8aca5f4f83a9c60c7959f4a983",
+      "local_sha256": "7a8073a2ea00aaf14f3559a94fe67b708c96dd8aca5f4f83a9c60c7959f4a983",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2RevoluteJoint.cpp",
+      "upstream_sha256": "ff3c9da68427972e7c18200a8584cf1abef28204b5708bcb1d3758f16e72d20f",
+      "local_sha256": "ff3c9da68427972e7c18200a8584cf1abef28204b5708bcb1d3758f16e72d20f",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2RevoluteJoint.h",
+      "upstream_sha256": "fb001193941ca313d7047ba829c0a26bf1675f8dc62e31ced25ef5c9079f546c",
+      "local_sha256": "fb001193941ca313d7047ba829c0a26bf1675f8dc62e31ced25ef5c9079f546c",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2RopeJoint.cpp",
+      "upstream_sha256": "5288d8a0f2a782935bb22d4336c2fe01c3ac6ea45d72d024ab9c609f160cc720",
+      "local_sha256": "5288d8a0f2a782935bb22d4336c2fe01c3ac6ea45d72d024ab9c609f160cc720",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2RopeJoint.h",
+      "upstream_sha256": "0f4bfe83f9dd9d3e62fa6cefdaa9224922c9d71b98beb01b46f459c6dfb7bd30",
+      "local_sha256": "0f4bfe83f9dd9d3e62fa6cefdaa9224922c9d71b98beb01b46f459c6dfb7bd30",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2WeldJoint.cpp",
+      "upstream_sha256": "fdbf701d223450cf301e9a371861108ddcecb07f7ba452adfd95f5e8e9d9f8b6",
+      "local_sha256": "fdbf701d223450cf301e9a371861108ddcecb07f7ba452adfd95f5e8e9d9f8b6",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2WeldJoint.h",
+      "upstream_sha256": "df18640ef7d46cdfdc414dfc032ac3911bdce3388991002097b3bcdb01fb8d20",
+      "local_sha256": "df18640ef7d46cdfdc414dfc032ac3911bdce3388991002097b3bcdb01fb8d20",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2WheelJoint.cpp",
+      "upstream_sha256": "57f2e9baac2a2787ab2ee95e54a3d0d51ddca7263132b01aa909968a1d62544d",
+      "local_sha256": "57f2e9baac2a2787ab2ee95e54a3d0d51ddca7263132b01aa909968a1d62544d",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Dynamics/Joints/b2WheelJoint.h",
+      "upstream_sha256": "274c7d5fc23813b0f9982dbbc82fa5a211cd61d723a8318cb134afbac397c3fe",
+      "local_sha256": "274c7d5fc23813b0f9982dbbc82fa5a211cd61d723a8318cb134afbac397c3fe",
+      "modified": false
+    },
+    {
+      "file": "Box2D/Rope/b2Rope.cpp",
+      "upstream_sha256": "37ef7ef2e6a6c15734d2a6cdc4c19c5b936a8258b80723a3cb233cc16e5379d5",
+      "local_sha256": "73875d2770cc636c9bc8830d6b4d0d48fac27ff0e990cbfad4007f5c446bbd3f",
+      "modified": true
+    },
+    {
+      "file": "Box2D/Rope/b2Rope.h",
+      "upstream_sha256": "d52a7206282e41e1bb6dde2e255c37395245319291d8971ed4a3af364e546640",
+      "local_sha256": "d52a7206282e41e1bb6dde2e255c37395245319291d8971ed4a3af364e546640",
+      "modified": false
+    }
+  ]
+}

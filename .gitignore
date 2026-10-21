@@ -1,0 +1,35 @@
+# Generated game, extracted APK resources and compiler intermediates
+*.apk
+/bin/
+/build/
+/dist/
+/original/
+/BeanQuest-Windows-*.zip
+
+# Personal progress and native test output, wherever the game is launched
+saves/
+test-output/
+
+# Visual Studio local settings and caches
+.vs/
+ipch/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.obj
+*.res
+*.pdb
+*.ilk
+*.idb
+*.tlog
+*.lastbuildstate
+
+# Python tooling caches and Windows Explorer metadata
+__pycache__/
+*.py[cod]
+.venv/
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,26 @@
+Box2D 2.2.0 by Erin Catto and contributors. This is the active physics source.
+
+The supplied libBeansQuest.so contains b2_version = {2,2,0},
+CollisionWorld::WorldToPhysicsScale = 1/64 and PhysicsToWorldScale = 64.
+Its CollisionWorld::Update calls Step(dt,10,10), then ClearForces().
+
+Official archived release:
+https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/box2d/Box2D_v2.2.0.zip
+Archive SHA256:
+1b298d30d8eb562fbe2a16cf16a6ec0ffc85688b13d4c0a490850c0eac6b9f31
+
+The original zlib license is preserved in License.txt and source headers.
+Local changes are explicitly marked and recorded in PORTING.diff:
+- Win32 heap allocation instead of malloc/free.
+- CRT-free x87 math helpers and finite-value check.
+- Local pair sorting with the original comparison order.
+- Local exponential helper for rope damping.
+- MSVC _WIN32 detection in both timer source and header.
+
+SOURCE.json pins every upstream/local source hash. Verify with:
+python tools/audit_box2d.py
+
+Matching the library version does not establish bitwise simulation parity.
+The game-level callbacks, fixture filters and event ordering require separate
+review against the native library. The previous 2.3.1 tree is retained only as
+historical source and is not part of the build.

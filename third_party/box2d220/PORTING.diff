@@ -1,0 +1,281 @@
+--- upstream/Box2D/Collision/b2BroadPhase.h
++++ local/Box2D/Collision/b2BroadPhase.h
+@@ -22,7 +22,7 @@
+ #include <Box2D/Common/b2Settings.h>
+ #include <Box2D/Collision/b2Collision.h>
+ #include <Box2D/Collision/b2DynamicTree.h>
+-#include <algorithm>
++// BeanQuest modification: use a local pair sort instead of the STL runtime.
+ 
+ struct b2Pair
+ {
+@@ -204,7 +204,14 @@
+ 	m_moveCount = 0;
+ 
+ 	// Sort the pair buffer to expose duplicates.
+-	std::sort(m_pairBuffer, m_pairBuffer + m_pairCount, b2PairLessThan);
++	for(int32 gap=m_pairCount/2;gap>0;gap/=2)
++    for(int32 i=gap;i<m_pairCount;i++)
++    {
++        b2Pair pair=m_pairBuffer[i];int32 j=i;
++        while(j>=gap && b2PairLessThan(pair,m_pairBuffer[j-gap]))
++        {m_pairBuffer[j]=m_pairBuffer[j-gap];j-=gap;}
++        m_pairBuffer[j]=pair;
++    }
+ 
+ 	// Send the pairs back to the client.
+ 	int32 i = 0;
+--- upstream/Box2D/Common/b2Math.h
++++ local/Box2D/Common/b2Math.h
+@@ -20,24 +20,22 @@
+ #define B2_MATH_H
+ 
+ #include <Box2D/Common/b2Settings.h>
+-
+-#include <cmath>
+ #include <cfloat>
+ #include <cstddef>
+-#include <limits>
+-
+-/// This function is used to ensure that a floating point number is
+-/// not a NaN or infinity.
++
++// BeanQuest modification: use CRT-free x87 math helpers for Windows XP.
++extern "C" float bqSqrt(float);
++extern "C" float bqAtan2(float,float);
++extern "C" float bqSin(float);
++extern "C" float bqCos(float);
++extern "C" float bqFloor(float);
++extern "C" float bqExp(float);
++
++/// This function is used to ensure that a floating point number is not a NaN or infinity.
+ inline bool b2IsValid(float32 x)
+ {
+-	if (x != x)
+-	{
+-		// NaN.
+-		return false;
+-	}
+-
+-	float32 infinity = std::numeric_limits<float32>::infinity();
+-	return -infinity < x && x < infinity;
++	int32 ix = *reinterpret_cast<int32*>(&x);
++	return (ix & 0x7f800000) != 0x7f800000;
+ }
+ 
+ /// This is a approximate yet fast inverse square-root.
+@@ -57,8 +55,8 @@
+ 	return x;
+ }
+ 
+-#define	b2Sqrt(x)	std::sqrt(x)
+-#define	b2Atan2(y, x)	std::atan2(y, x)
++#define	b2Sqrt(x)	bqSqrt(x)
++#define	b2Atan2(y, x)	bqAtan2(y, x)
+ 
+ /// A 2D column vector.
+ struct b2Vec2
+@@ -307,16 +305,16 @@
+ 	explicit b2Rot(float32 angle)
+ 	{
+ 		/// TODO_ERIN optimize
+-		s = sinf(angle);
+-		c = cosf(angle);
++		s = bqSin(angle);
++		c = bqCos(angle);
+ 	}
+ 
+ 	/// Set using an angle in radians.
+ 	void Set(float32 angle)
+ 	{
+ 		/// TODO_ERIN optimize
+-		s = sinf(angle);
+-		c = cosf(angle);
++		s = bqSin(angle);
++		c = bqCos(angle);
+ 	}
+ 
+ 	/// Set to the identity rotation
+@@ -709,7 +707,7 @@
+ inline void b2Sweep::Normalize()
+ {
+ 	float32 twoPi = 2.0f * b2_pi;
+-	float32 d =  twoPi * floorf(a0 / twoPi);
++	float32 d =  twoPi * bqFloor(a0 / twoPi);
+ 	a0 -= d;
+ 	a -= d;
+ }
+--- upstream/Box2D/Common/b2Settings.cpp
++++ local/Box2D/Common/b2Settings.cpp
+@@ -17,17 +17,9 @@
+ */
+ 
+ #include <Box2D/Common/b2Settings.h>
+-#include <cstdlib>
+-
++// BeanQuest modification: use the XP-compatible Win32 heap, without CRT imports.
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
+ b2Version b2_version = {2, 2, 0};
+-
+-// Memory allocators. Modify these to use your own allocator.
+-void* b2Alloc(int32 size)
+-{
+-	return malloc(size);
+-}
+-
+-void b2Free(void* mem)
+-{
+-	free(mem);
+-}
++void* b2Alloc(int32 size) { return HeapAlloc(GetProcessHeap(),0,size); }
++void b2Free(void* mem) { if(mem) HeapFree(GetProcessHeap(),0,mem); }
+--- upstream/Box2D/Common/b2Timer.cpp
++++ local/Box2D/Common/b2Timer.cpp
+@@ -18,7 +18,7 @@
+ 
+ #include <Box2D/Common/b2Timer.h>
+ 
+-#if defined(WIN32)
++#if defined(_WIN32) // BeanQuest modification: use MSVC's Windows platform macro.
+ 
+ float64 b2Timer::s_invFrequency = 0.0f;
+ 
+--- upstream/Box2D/Common/b2Timer.h
++++ local/Box2D/Common/b2Timer.h
+@@ -35,7 +35,7 @@
+ 
+ private:
+ 
+-#if defined(WIN32)
++#if defined(_WIN32) // BeanQuest modification: MSVC Windows platform macro.
+ 	float64 m_start;
+ 	static float64 s_invFrequency;
+ #elif defined(__linux__) || defined (__APPLE__)
+--- upstream/Box2D/Dynamics/b2Body.h
++++ local/Box2D/Dynamics/b2Body.h
+@@ -230,6 +230,11 @@
+ 	/// @return the rotational inertia, usually in kg-m^2.
+ 	float32 GetInertia() const;
+ 
++	// Port checkpoint bridge: native PhysicsObject serializes the pending
++	// force and torque after post-step force fields have run.
++	const b2Vec2& GetCheckpointForce() const { return m_force; }
++	float32 GetCheckpointTorque() const { return m_torque; }
++
+ 	/// Get the mass data of the body.
+ 	/// @return a struct containing the mass, inertia and center of the body.
+ 	void GetMassData(b2MassData* data) const;
+--- upstream/Box2D/Dynamics/b2Island.cpp
++++ local/Box2D/Dynamics/b2Island.cpp
+@@ -370,7 +370,9 @@
+ 			}
+ 		}
+ 
+-		if (minSleepTime >= b2_timeToSleep && positionSolved)
++		// BeanQuest modification: native0x3d47c8..48bc gates sleep on
++		// velocity/age only; it does not require a converged position solve.
++		if (minSleepTime >= b2_timeToSleep)
+ 		{
+ 			for (int32 i = 0; i < m_bodyCount; ++i)
+ 			{
+--- upstream/Box2D/Dynamics/Contacts/b2Contact.h
++++ local/Box2D/Dynamics/Contacts/b2Contact.h
+@@ -43,6 +43,9 @@
+ /// For example, a superball bounces on anything.
+ inline float32 b2MixRestitution(float32 restitution1, float32 restitution2)
+ {
++	// BeanQuest modification: the shipped solver0x3d9e04..30 treats
++	// exactly -1 on either fixture as an explicit no-restitution sentinel.
++	if (restitution1 == -1.0f || restitution2 == -1.0f) return 0.0f;
+ 	return restitution1 > restitution2 ? restitution1 : restitution2;
+ }
+ 
+--- upstream/Box2D/Dynamics/Contacts/b2ContactSolver.cpp
++++ local/Box2D/Dynamics/Contacts/b2ContactSolver.cpp
+@@ -36,6 +36,9 @@
+ 	float32 invMassA, invMassB;
+ 	b2Vec2 localCenterA, localCenterB;
+ 	float32 invIA, invIB;
++	// BeanQuest modification: native0x3da268..298 equalizes position
++	// correction masses, while velocity constraints retain physical masses.
++	float32 positionMassA, positionMassB;
+ 	b2Manifold::Type type;
+ 	float32 radiusA, radiusB;
+ 	int32 pointCount;
+@@ -93,6 +96,8 @@
+ 		pc->localCenterB = bodyB->m_sweep.localCenter;
+ 		pc->invIA = bodyA->m_invI;
+ 		pc->invIB = bodyB->m_invI;
++		pc->positionMassA = bodyA->m_mass;
++		pc->positionMassB = bodyB->m_mass;
+ 		pc->localNormal = manifold->localNormal;
+ 		pc->localPoint = manifold->localPoint;
+ 		pc->pointCount = pointCount;
+@@ -673,11 +678,11 @@
+ 		int32 indexA = pc->indexA;
+ 		int32 indexB = pc->indexB;
+ 		b2Vec2 localCenterA = pc->localCenterA;
+-		float32 mA = pc->invMassA;
+-		float32 iA = pc->invIA;
++		float32 mA = pc->positionMassA * pc->invMassA;
++		float32 iA = pc->positionMassA * pc->invIA;
+ 		b2Vec2 localCenterB = pc->localCenterB;
+-		float32 mB = pc->invMassB;
+-		float32 iB = pc->invIB;
++		float32 mB = pc->positionMassB * pc->invMassB;
++		float32 iB = pc->positionMassB * pc->invIB;
+ 		int32 pointCount = pc->pointCount;
+ 
+ 		b2Vec2 cA = m_positions[indexA].c;
+@@ -737,7 +742,8 @@
+ 
+ 	// We can't expect minSpeparation >= -b2_linearSlop because we don't
+ 	// push the separation above -b2_linearSlop.
+-	return minSeparation >= -3.0f * b2_linearSlop;
++	// Native0x3da700 uses -0.0075, or -1.5*linearSlop.
++	return minSeparation >= -1.5f * b2_linearSlop;
+ }
+ 
+ // Sequential position solver for position constraints.
+@@ -755,21 +761,13 @@
+ 		b2Vec2 localCenterB = pc->localCenterB;
+ 		int32 pointCount = pc->pointCount;
+ 
+-		float32 mA = 0.0f;
+-		float32 iA = 0.0f;
+-		if (indexA == toiIndexA || indexA == toiIndexB)
+-		{
+-			mA = pc->invMassA;
+-			iA = pc->invIA;
+-		}
+-
+-		float32 mB = pc->invMassB;
+-		float32 iB = pc->invIB;
+-		if (indexB == toiIndexA || indexB == toiIndexB)
+-		{
+-			mB = pc->invMassB;
+-			iB = pc->invIB;
+-		}
++		// BeanQuest modification: native0x3da7ac..7e4 uses the same
++		// equalized masses for every TOI-island contact; its body arguments
++		// are unused. Velocity impulses still use the actual inverse masses.
++		float32 mA = pc->positionMassA * pc->invMassA;
++		float32 iA = pc->positionMassA * pc->invIA;
++		float32 mB = pc->positionMassB * pc->invMassB;
++		float32 iB = pc->positionMassB * pc->invIB;
+ 
+ 		b2Vec2 cA = m_positions[indexA].c;
+ 		float32 aA = m_positions[indexA].a;
+--- upstream/Box2D/Rope/b2Rope.cpp
++++ local/Box2D/Rope/b2Rope.cpp
+@@ -109,7 +109,8 @@
+ 		return;
+ 	}
+ 
+-	float32 d = expf(- h * m_damping);
++	// BeanQuest modification: use the local CRT-free exponential helper.
++	float32 d = bqExp(- h * m_damping);
+ 
+ 	for (int32 i = 0; i < m_count; ++i)
+ 	{

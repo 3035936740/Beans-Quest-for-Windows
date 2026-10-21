@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B43761B7-414E-49A0-8563-89DC4946F4F3}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword><RootNamespace>BeanQuest</RootNamespace><WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v143</PlatformToolset><CharacterSet>MultiByte</CharacterSet></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(ProjectDir)bin\</OutDir><IntDir>$(ProjectDir)build\vs\</IntDir><TargetName>BeansQuest</TargetName><LinkIncremental>false</LinkIncremental></PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization><IntrinsicFunctions>true</IntrinsicFunctions><BufferSecurityCheck>false</BufferSecurityCheck><RuntimeTypeInfo>false</RuntimeTypeInfo><ExceptionHandling>false</ExceptionHandling><WarningLevel>Level4</WarningLevel><FloatingPointModel>Fast</FloatingPointModel><RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;BQ_ENABLE_TESTS=0;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)third_party\box2d220;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/arch:IA32 /Gy /Gw /Zc:inline /Gs9999999 /Zl %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem><MinimumRequiredVersion>5.01</MinimumRequiredVersion><EntryPointSymbol>start</EntryPointSymbol><IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries><TargetMachine>MachineX86</TargetMachine><EnableCOMDATFolding>true</EnableCOMDATFolding><OptimizeReferences>true</OptimizeReferences><GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalOptions>/IGNORE:4210 /DEBUG:NONE /INCREMENTAL:NO %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;opengl32.lib;winmm.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="third_party\box2d220\Box2D\**\*.cpp" />
+    <ClCompile Include="src\runtime.cpp"><Optimization>Disabled</Optimization><IntrinsicFunctions>false</IntrinsicFunctions></ClCompile>
+    <ClInclude Include="src\ending_credits_presentation_native.h" />
+    <ClInclude Include="src\checks_ending_credits_presentation.h" />
+    <ClInclude Include="src\checks_crumbling_cloud_native.h" />
+      <ClInclude Include="src\checks_cloud57_jump_native.h" />
+      <ClInclude Include="src\helper_animation_state_native.h" />
+      <ClInclude Include="src\helper_animation_native.h" />
+      <ClInclude Include="src\checks_helper_animation_native.h" />
+      <ClInclude Include="src\checks_helper_perch_native.h" />
+      <ClInclude Include="src\checks_helper_solved_native.h" />
+      <ClInclude Include="src\breakable_native.h" />
+      <ClInclude Include="src\checks_alternator_body_native.h" />
+      <ClInclude Include="src\alternator_body_native.h" />
+      <ClInclude Include="src\checks_continuous_restore_native.h" />
+      <ClInclude Include="src\checks_breakable_solved_native.h" />
+    <ClInclude Include="src\checks_wizard_final_camera.h" />
+    <ClInclude Include="src\checks_wizard_gate_audio.h" />
+    <ClInclude Include="src\checks_pendulum_native.h" />
+    <ClInclude Include="src\checks_enemy_speed_native.h" />
+    <ClInclude Include="src\bullet_source_animation_native.h" />
+    <ClInclude Include="src\checks_bullet_source_animation_native.h" />
+    <ClInclude Include="src\checks_wizard_summon_waves.h" />
+    <ClInclude Include="src\audio_jump_trace.h" />
+    <ClInclude Include="src\checks_audio_jump_trace.h" />
+    <ClInclude Include="src\checks_rescue_jump_audio_native.h" />
+    <ClInclude Include="src\credits_runtime_native.h" />
+    <ClInclude Include="src\checks_credits_runtime_native.h" />
+    <ClInclude Include="src\ready_native.h" />
+    <ClInclude Include="src\checks_ready_native.h" />
+    <ClInclude Include="src\platform.h" /><ClInclude Include="src\assets.h" /><ClInclude Include="src\audio.h" /><ClInclude Include="src\effects.h" /><ClInclude Include="src\game.h" /><ClInclude Include="src\physics.h" /><ClInclude Include="src\render.h" /><ClInclude Include="src\interface.h" /><ClInclude Include="src\checks.h" />
+    <ClInclude Include="src\checks_av.h" />
+    <ClInclude Include="src\checks_native.h" />
+    <ClInclude Include="src\checks_camera_restore_native.h" />
+    <ClInclude Include="src\checks_cloud.h" />
+    <ClInclude Include="src\checks_diagonal.h" />
+    <ClInclude Include="src\checks_enemy.h" />
+    <ClInclude Include="src\checks_selector_motion.h" />
+    <ClInclude Include="src\helper_bird.h" />
+    <ClInclude Include="src\frog.h" />
+    <ClInclude Include="src\checks_helper.h" />
+    <ClInclude Include="src\checks_frog.h" />
+    <ClInclude Include="src\checks_frog_interrupt_native.h" />
+    <ClInclude Include="src\jumper_ground_native.h" />
+    <ClInclude Include="src\checks_jumper_ground_native.h" />
+    <ClInclude Include="src\jumper_water_pose.h" />
+    <ClInclude Include="src\checks_jumper_water_pose.h" />
+    <ClInclude Include="src\world_card_texture_repair.h" />
+    <ClInclude Include="src\checks_world_card_texture.h" />
+    <ClInclude Include="src\selector_preview_repair.h" />
+    <ClInclude Include="src\selector_preview_geometry_repair.h" />
+    <ClInclude Include="src\checks_selector_preview_geometry_repair.h" />
+    <ClInclude Include="src\checks_selector_preview_tint.h" />
+    <ClInclude Include="src\checks_animation.h" />
+    <ClInclude Include="src\water.h" />
+    <ClInclude Include="src\checks_water.h" />
+    <ClInclude Include="src\checks_contacts.h" />
+    <ClInclude Include="src\checks_intro.h" />
+    <ClInclude Include="src\checks_motion.h" />
+    <ClInclude Include="src\checks_selector_physics.h" />
+    <ClInclude Include="src\checks_visual_followup.h" />
+    <ClInclude Include="src\checks_wizard.h" />
+    <ClInclude Include="src\contact_behaviors.h" />
+    <ClInclude Include="src\intro.h" />
+    <ClInclude Include="src\motion.h" />
+    <ClInclude Include="src\physics_shapes.h" />
+    <ClInclude Include="src\projectiles.h" />
+    <ClInclude Include="src\selector_physics.h" />
+    <ClInclude Include="src\background_native.h" />
+    <ClInclude Include="src\bullet_source.h" />
+    <ClInclude Include="src\bullet_source_state.h" />
+    <ClInclude Include="src\checks_background_native.h" />
+    <ClInclude Include="src\checks_goal_launch.h" />
+    <ClInclude Include="src\checks_magnet.h" />
+    <ClInclude Include="src\checks_opening.h" />
+    <ClInclude Include="src\checks_respawn_transition.h" />
+    <ClInclude Include="src\checks_respawn_controls.h" />
+    <ClInclude Include="src\checks_source_native.h" />
+    <ClInclude Include="src\checks_projectile_layers.h" />
+    <ClInclude Include="src\checks_magnet_checkpoint.h" />
+    <ClInclude Include="src\checks_wizard_arena.h" />
+    <ClInclude Include="src\wizard_arena_native.h" />
+    <ClInclude Include="src\checks_spider_animation.h" />
+    <ClInclude Include="src\checks_spike_eye_animation.h" />
+    <ClInclude Include="src\checks_stomp_native.h" />
+    <ClInclude Include="src\checks_wizard_motion.h" />
+    <ClInclude Include="src\checks_wizard_pose.h" />
+    <ClInclude Include="src\enemy_animation.h" />
+    <ClInclude Include="src\goal_launch.h" />
+    <ClInclude Include="src\stage_clear_native.h" />
+    <ClInclude Include="src\checks_stage_clear_math.h" />
+    <ClInclude Include="src\checks_stage_clear_ui.h" />
+    <ClInclude Include="src\checks_hidden_physics.h" />
+    <ClInclude Include="src\checks_jump_audio_followup.h" />
+    <ClInclude Include="src\spike_animation_native.h" />
+    <ClInclude Include="src\checks_spike_alternation.h" />
+    <ClInclude Include="src\checks_wizard_followup.h" />
+    <ClInclude Include="src\opening.h" />
+    <ClInclude Include="src\particles_native.h" />
+    <ClInclude Include="src\respawn_transition.h" />
+    <ClInclude Include="src\stomp_native.h" />
+    <ClInclude Include="src\wizard_motion.h" />
+    <ClInclude Include="src\wizard_motion_state.h" />
+    <ClInclude Include="src\wizard_pose.h" />
+    <ClInclude Include="src\checks_collectable_native.h" />
+    <ClInclude Include="src\checks_tom_contact.h" />
+    <ClInclude Include="src\checks_wall_native.h" />
+    <ClInclude Include="src\collectable_native.h" />
+    <ClInclude Include="src\tom_contact.h" />
+    <ClInclude Include="src\checkpoint_native.h" />
+    <ClInclude Include="src\checks_activation_native.h" />
+    <ClInclude Include="src\checks_checkpoint_native.h" />
+    <ClInclude Include="src\checks_projectile_checkpoint_native.h" />
+    <ClInclude Include="src\checks_projectile_pool_native.h" />
+    <ClInclude Include="src\checks_campaign_projectile_capacity_native.h" />
+    <ClInclude Include="src\checks_campaign_projectile_animation_native.h" />
+    <ClInclude Include="src\checks_projectile_overlap_native.h" />
+    <ClInclude Include="src\checks_boss_projectile_instances_native.h" />
+    <ClInclude Include="src\projectile_animation_native.h" />
+    <ClInclude Include="src\projectile_animation_state_native.h" />
+    <ClInclude Include="src\checks_secret_layer_native.h" />
+    <ClInclude Include="src\checks_enemy_animation_boundaries.h" />
+    <ClInclude Include="src\checks_jump_awards_native.h" />
+    <ClInclude Include="src\checks_selector_locked_awards.h" />
+    <ClInclude Include="src\checks_motion_timestep_native.h" />
+    <ClInclude Include="src\checks_source_interval_native.h" />
+    <ClInclude Include="src\checks_paused_actor_animation_native.h" />
+    <ClInclude Include="src\checks_walk_start_native.h" />
+    <ClInclude Include="src\checks_eye_native.h" />
+    <ClInclude Include="src\checks_killable_contact_native.h" />
+    <ClInclude Include="src\checks_oneway_geometry.h" />
+    <ClInclude Include="src\checks_oneway_native.h" />
+    <ClInclude Include="src\checks_selector_particles.h" />
+    <ClInclude Include="src\selector_water_surface_repair.h" />
+    <ClInclude Include="src\checks_selector_water_surface.h" />
+    <ClInclude Include="src\trampoline_native.h" />
+    <ClInclude Include="src\background_extension.h" />
+    <ClInclude Include="src\background_extension_policies.h" />
+    <ClInclude Include="src\checks_background_extension.h" />
+    <ClInclude Include="src\tom_jump_diagnostics.h" />
+    <ClInclude Include="src\checks_tom_jump_diagnostics.h" />
+    <ClInclude Include="src\audio_silence_keepalive.h" />
+    <ClInclude Include="src\pinball_native.h" />
+    <ClInclude Include="src\pinball_state_native.h" />
+    <ClInclude Include="src\checks_pinball_phase_native.h" />
+    <ClInclude Include="src\pause_transition_native.h" />
+    <ClInclude Include="src\checks_pause_transition_native.h" />
+    <ClInclude Include="src\checks_pause_interface_native.h" />
+    <ClInclude Include="src\title_presentation_native.h" />
+    <ClInclude Include="src\killable_death_native.h" />
+    <ClInclude Include="src\checks_killable_death_native.h" />
+    <ClInclude Include="src\checks_shot_death_native.h" />
+    <ClInclude Include="src\jumper_animation_state_native.h" />
+    <ClInclude Include="src\jumper_animation_native.h" />
+    <ClInclude Include="src\fish_animation_state_native.h" />
+    <ClInclude Include="src\fish_animation_native.h" />
+    <ClInclude Include="src\checks_fish_animation_native.h" />
+    <ClInclude Include="src\checks_credits_projectile_native.h" />
+    <ClInclude Include="src\checks_credits_shot_animation_native.h" />
+    <ClInclude Include="src\checks_particle_burst_native.h" />
+    <ClInclude Include="src\checks_jumper_animation_native.h" />
+    <ClInclude Include="src\checks_pinball_native.h" />
+    <ClInclude Include="src\touch_alternator_native.h" />
+    <ClInclude Include="src\checks_touch_alternator_native.h" />
+    <ClInclude Include="src\secret_reference_native.h" />
+    <ClInclude Include="src\checks_secret_reference_native.h" />
+    <ClInclude Include="src\checks_audio_silence_keepalive.h" />
+    <ClInclude Include="src\checks_selector_trampoline_native.h" />
+    <ClInclude Include="src\killable_contact_native.h" />
+    <ClInclude Include="src\checks_continuous_particles.h" />
+    <ClInclude Include="src\checks_killable_projectile_native.h" />
+    <ClInclude Include="src\checks_motion_native.h" />
+    <ClInclude Include="src\checks_wizard_presentation.h" />
+    <ClInclude Include="src\continuous_particles.h" />
+    <ClInclude Include="src\diagonal_state.h" />
+    <ClInclude Include="src\wizard_presentation.h" />
+    <ClInclude Include="src\wizard_presentation_state.h" />
+    <ClInclude Include="src\checks_deadly_native.h" />
+    <ClInclude Include="src\checks_ending_credits_native.h" />
+    <ClInclude Include="src\checks_finale_route_audio.h" />
+    <ClInclude Include="src\checks_wizard_transition_native.h" />
+    <ClInclude Include="src\checks_wizard_retry_rng.h" />
+    <ClInclude Include="src\ending_credits_native.h" />
+    <ClInclude Include="src\checks_ending_transformation.h" />
+    <ClInclude Include="src\checks_rotation_native.h" />
+    <ClInclude Include="src\checks_spike_group_native.h" />
+    <ClInclude Include="src\checks_viewport_native.h" />
+    <ClInclude Include="src\ending_transformation_native.h" />
+    <ClInclude Include="src\rotation_native.h" />
+    <ClInclude Include="src\spike_group_contact_native.h" />
+    <ClInclude Include="src\viewport_native.h" />
+    <ClInclude Include="src\checks_force_area_native.h" />
+    <ClInclude Include="src\checks_selector_spike_placement.h" />
+    <ClInclude Include="src\checks_spike_placement_native.h" />
+    <ClInclude Include="src\force_area_native.h" />
+    <ResourceCompile Include="build\game.rc" Condition="Exists('$(ProjectDir)build\game.rc')" />
+    <ClInclude Include="src\checks_wizard_music.h" />
+    <ClInclude Include="src\world_select_native.h" />
+    <ClInclude Include="src\checks_world_select_native.h" />
+    <ClInclude Include="src\checks_box_push_native.h" />
+    <ClInclude Include="src\checks_selector_slope_native.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="PrepareRuntimeAssets" BeforeTargets="PrepareForBuild">
+    <Exec Command="python &quot;$(ProjectDir)tools\prepare.py&quot;" WorkingDirectory="$(ProjectDir)" Condition="!Exists('$(OutDir)data\Media\project.pgame') Or !Exists('$(OutDir)data\Media\Font\Vera.ttf') Or !Exists('$(OutDir)data\audio\3080012186760326.wav')" />
+    <MakeDir Directories="$(OutDir)saves" />
+  </Target>
+  <Target Name="CopyRuntimeReadme" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)README.md" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="$(ProjectDir)THIRD_PARTY_NOTICES.txt" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="$(ProjectDir)PORTING_AUDIT.txt" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="$(ProjectDir)NATIVE_REVIEW.md" DestinationFolder="$(OutDir)" />
+  </Target>
+</Project>
