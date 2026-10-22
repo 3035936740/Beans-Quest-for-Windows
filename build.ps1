@@ -81,6 +81,11 @@ try {
             throw 'Attract intro preparation failed.'
         }
     }
+    # Maker layers are user-editable PNGs; refresh them even when APK extraction is skipped.
+    & python tools/prepare_maker_art.py
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Maker artwork preparation failed.'
+    }
     $objects = @('build/main.obj','build/runtime.obj')
     New-Item -ItemType Directory -Force build/box2d220 | Out-Null
     $physicsSources = @(Get-ChildItem -LiteralPath 'third_party/box2d220/Box2D' -Recurse -Filter '*.cpp')

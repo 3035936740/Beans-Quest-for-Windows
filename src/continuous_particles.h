@@ -164,6 +164,8 @@ void nativeContinuousStep(NativeContinuousPool &pool, Rect bounds, float scale, 
     float rate = pool.source->props.num("particles-per-second", 10);
     bool emitting = pool.source->props.flag("emitting", true) && rate > 0 && pool.totalWeight > 0;
     float interval = emitting ? 1 / rate : 0;
+    bool weatherBirds = pool.source->klass == 697074819893ULL &&
+                        pool.source->props.flag("maker-weather");
     if (emitting)
         pool.budget += dt;
     else
@@ -174,6 +176,15 @@ void nativeContinuousStep(NativeContinuousPool &pool, Rect bounds, float scale, 
         NativeContinuousParticle &p = pool.particles[i];
         if (p.definition >= 0)
             p.age += dt;
+        // Recycle custom-weather birds once they fly beyond the window's sides. The original
+        // unbounded eight-second lifetime otherwise keeps a small pool occupied offscreen.
+        if (weatherBirds && p.definition >= 0) {
+            Vec position = nativeContinuousPosition(p, pool.definitions[p.definition]);
+            if (position.x < bounds.l - 16 || position.x > bounds.r + 16) {
+                p.definition = -1;
+                pool.deaths++;
+            }
+        }
         if (nativeContinuousAlive(pool, p, bounds))
             continue;
         if (emitting && pool.budget > 0) {
@@ -255,6 +266,8 @@ void nativeContinuousAdvanceScene(Level &scene, float scale, float time, float d
         Object &source = scene.objects[i];
         if (source.base != 5)
             continue;
+        if (source.props.flag("maker-weather"))
+            source.rect = makerWeatherEmitterRect(source, viewW, viewH);
         NativeContinuousPool &pool = nativeContinuousPoolFor(source, time);
         if (pool.updated && pool.lastTime == time)
             continue;

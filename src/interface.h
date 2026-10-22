@@ -51,6 +51,21 @@ struct UiScene {
 };
 
 UiScene page, hudScene;
+
+// Course maker hooks; maker.h at the end of this file implements them.
+bool makerWorldNode(const Object &o);
+bool makerDrawWorldNode(UiScene &s, UiNode &n);
+void makerDecorateWorldSelect();
+void makerOpenBrowser();
+bool makerHudCaption(u64 id, char *value);
+bool makerKey(int key);
+bool makerPointerMove(float x, float y);
+bool makerPointerDown(float x, float y, int button);
+bool makerPointerUp(float x, float y, int button);
+void makerTick(float dt);
+void makerRender();
+void makerRenderPlayOverlay();
+
 PauseTransitionNativeState pauseInterfaceNative;
 u64 pauseBackgroundNative, pauseInitialFocusNative = 7545429638806213302ULL;
 int pauseLayerNative = 1;
@@ -632,6 +647,7 @@ void navigate(u64 id) {
         screen = TITLE;
     else if (eq(name, "World Select")) {
         screen = WORLD;
+        makerDecorateWorldSelect();
         int w = (int)levels[stageList[currentStage]].props.num("bean-world", 1);
         selectedWorld = w;
         for (int i = 0; i < page.level.objectCount; i++)
@@ -807,6 +823,10 @@ void resumePauseInterfaceNative() {
 }
 
 void openSelect() {
+    if (makerRun.active) {
+        makerExitPlay();
+        return;
+    }
     if (currentStage < 0 || currentStage >= stageCount)
         currentStage = 0;
     u64 target = idnum(levels[stageList[currentStage]].props.get("level-select"));
@@ -957,6 +977,12 @@ float titleBeanBobNative(float age) {
     return 4 * bqSin(age * 6.2831854820251465f / 2.5f);
 }
 
+Rect uiLayerViewportRect(UiScene &scene, int layer) {
+    Vec camera = layerCameraPosition(scene.level, layer, scene.cameraX, scene.cameraY);
+    return Rect{camera.x - viewW * 0.5f, camera.y - viewH * 0.5f,
+                camera.x + viewW * 0.5f, camera.y + viewH * 0.5f};
+}
+
 Rect visualRect(UiScene &scene, UiNode &n) {
     Rect r = n.rect;
     Object &o = *n.object;
@@ -979,11 +1005,21 @@ Rect visualRect(UiScene &scene, UiNode &n) {
         r = shifted(r, offset.x, offset.y);
     }
     if (&scene == &hudScene && screen == PLAY && o.layer == 3 && readyTimer > 0) {
-        Vec c = center(r),
-            camera = layerCameraPosition(scene.level, o.layer, scene.cameraX, scene.cameraY);
-        Rect view = {camera.x - viewW * 0.5f, camera.y - viewH * 0.5f, camera.x + viewW * 0.5f,
-                     camera.y + viewH * 0.5f};
+        Vec c = center(r);
+        Rect view = uiLayerViewportRect(scene, o.layer);
         Vec pose = readyNativePosition(readyOpening.age, c, view, o.id == 17323956314806549368ULL);
+        if (o.id == 17109890148369247723ULL || o.id == 11001010908721541493ULL) {
+            // These solid, translucent panels are viewport shades. Extend each
+            // once, without overlapping tiles that would darken their seams.
+            // Keep the inner edges and apply the original exit displacement
+            // after extension so tall windows retain the same opening gap.
+            r.l = minf(r.l, view.l);
+            r.r = maxf(r.r, view.r);
+            if (o.id == 17109890148369247723ULL)
+                r.t = maxf(r.t, view.t);
+            else
+                r.b = minf(r.b, view.b);
+        }
         r = shifted(r, pose.x - c.x, pose.y - c.y);
     }
     if (&scene == &hudScene && screen == COMPLETE && o.layer == 2) {
@@ -1007,6 +1043,15 @@ Rect visualRect(UiScene &scene, UiNode &n) {
         Vec offset =
             titleNativeOffset(titleNativeTrackFor(scene.level, o.id), scene.age, viewW, viewH);
         r = shifted(r, offset.x, offset.y);
+    }
+    if (screen == ENDING && &scene == &page &&
+        o.id == endingCreditsScene.fadeIn) {
+        // The ending controller fades this uniform background shade, separately
+        // from its illustration. Cover the current layer viewport at every
+        // scroll position and resize without stretching the illustration.
+        Rect view = uiLayerViewportRect(scene, o.layer);
+        r = Rect{minf(r.l, view.l), minf(r.b, view.b),
+                 maxf(r.r, view.r), maxf(r.t, view.t)};
     }
     if (screen == ENDING && &scene == &page &&
         (o.id == endingCreditsScene.emilio || o.id == endingCreditsScene.maria)) {
@@ -1098,6 +1143,8 @@ void originalCaption(UiScene &s, UiNode &n, Rect rect) {
                          : "PAR");
             replace = true;
         }
+        if (makerHudCaption(o.id, value))
+            replace = true;
     }
     if (screen == CONTROLS) {
         for (int i = 0; i < s.level.objectCount; i++) {
@@ -1136,6 +1183,8 @@ void originalCaption(UiScene &s, UiNode &n, Rect rect) {
 
 void drawUiNode(UiScene &s, UiNode &n, int index) {
     if (!visibleNode(s, n))
+        return;
+    if (makerDrawWorldNode(s, n))
         return;
     Object &o = *n.object;
     Rect r = visualRect(s, n);
@@ -1335,10 +1384,13 @@ void render() {
             box(0, 0, viewW, viewH, 0, 0, 0, 0.45f);
         if (!endingScene.active)
             drawOriginalScene(hudScene, false);
+        makerRenderPlayOverlay();
         if (saveFailed && noticeTimer > 0)
             centered(12, notice, 10);
     } else if (screen == INTRO)
         drawIntroStatus();
+    else if (screen == MAKER_EDIT || screen == MAKER_BROWSE)
+        makerRender();
     else
         drawOriginalScene(page);
     if (endingScene.active && endingScene.age > 8)
@@ -1463,6 +1515,12 @@ void tickUiPlayfield(UiScene &s, float dt, bool carryBean = true) {
 void tickInterface(float dt) {
     if (titleAttractBusy())
         return;
+    if (screen == MAKER_EDIT || screen == MAKER_BROWSE) {
+        if (transitionTime > 0)
+            transitionTime = maxf(0, transitionTime - dt);
+        makerTick(dt);
+        return;
+    }
     if (screen == PAUSE && pauseInterfaceNative.active) {
         int event = pauseTransitionNativeAdvance(pauseInterfaceNative, dt);
         if (event == PAUSE_NATIVE_FOCUS)
@@ -1495,7 +1553,7 @@ void tickInterface(float dt) {
         float drag = worldSelectDragNative(worldSelectPointerNative, dt, screenScale);
         pointerDragged = worldSelectPointerNative.dragged;
         page.targetX = page.level.size.x * .5f +
-                       worldSelectTargetNative(displayWorld(selectedWorld), drag) - viewW * .5f;
+                       worldSelectTargetNative(worldSelectSlot(selectedWorld), drag) - viewW * .5f;
         page.cameraX = approach(page.cameraX, page.targetX, 2048 * dt);
     }
     if (page.hasBean && screen == SELECT) {
@@ -1578,6 +1636,10 @@ void activate(UiScene &scene, int index) {
     Object &o = *node.object;
     if (node.disabled)
         return;
+    if (makerWorldNode(o)) {
+        makerOpenBrowser();
+        return;
+    }
     if (o.has("WorldButtonBehaviour") || o.has("WorldLevelButtonBehaviour")) {
         if (!worldOpen(node.world))
             return;
@@ -1642,7 +1704,9 @@ void activate(UiScene &scene, int index) {
         return;
     }
     if (o.has("LevelCompleteContinueButton")) {
-        if (currentStage + 1 < stageCount)
+        if (makerRun.active)
+            makerExitPlay();
+        else if (currentStage + 1 < stageCount)
             startStage(currentStage + 1);
         else
             navigate(137502285691ULL);
@@ -1834,6 +1898,8 @@ void keyPressed(int key) {
         return;
     if (endingScene.active && key != VK_F11)
         return;
+    if (makerKey(key))
+        return;
     if (screen == TITLE && key >= 'A' && key <= 'Z') {
         const char *code = "SKELETONKEY";
         if (key == code[debugSequence])
@@ -1844,6 +1910,7 @@ void keyPressed(int key) {
             debugMode = false;
             progress.unlocked = stageCount - 1;
             writeProgress();
+            makerUnlock();
             debugSequence = 0;
             sound("ringing");
             return;
@@ -1935,6 +2002,8 @@ void keyPressed(int key) {
 }
 
 void mouseInterface(float x, float y, bool click) {
+    if (!click && makerPointerMove(x, y))
+        return;
     titleAttractPointerActivity(x, y, click);
     if (titleAttractBusy()) {
         if (click)
@@ -1996,6 +2065,8 @@ int pointerHit(float x, float y) {
 }
 
 void pointerDown(float x, float y) {
+    if (makerPointerDown(x, y, 0))
+        return;
     if (titleAttractInput()) {
         pointerHeld = false;
         pointerNode = -1;
@@ -2025,6 +2096,8 @@ void pointerDown(float x, float y) {
 
 // Activate only the matching press target; dragging or changing scenes must cancel the pending button press.
 void pointerUp(float x, float y) {
+    if (makerPointerUp(x, y, 0))
+        return;
     readyPointerDown = false;
     bool wasHeld = pointerHeld;
     pointerHeld = false;
@@ -2032,11 +2105,11 @@ void pointerUp(float x, float y) {
         return;
     if (screen == WORLD) {
         bool dragged = worldSelectPointerNative.dragged;
-        int slot = worldSelectReleaseNative(worldSelectPointerNative, displayWorld(selectedWorld),
+        int slot = worldSelectReleaseNative(worldSelectPointerNative, worldSelectSlot(selectedWorld),
                                             x * screenScale, screenScale);
         if (dragged) {
             for (int i = 0; i < page.level.objectCount; i++)
-                if (page.nodes[i].world > 0 && displayWorld(page.nodes[i].world) == slot) {
+                if (page.nodes[i].world > 0 && worldSelectSlot(page.nodes[i].world) == slot) {
                     page.focus = i;
                     selectedWorld = page.nodes[i].world;
                     break;
@@ -2049,3 +2122,5 @@ void pointerUp(float x, float y) {
     if (pointerNode == pointerHit(x, y) && pointerScene == activeScene().level.id)
         mouseInterface(x, y, true);
 }
+
+#include "maker.h"

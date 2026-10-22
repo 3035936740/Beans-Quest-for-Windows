@@ -423,6 +423,8 @@ void drawEntity(Entity &e, Level *scene = 0, float cameraX = 0, float cameraY = 
         sceneAge = elapsed;
     }
     Rect r = killableDeathRectNative(e, entityRect(e));
+    if (e.source->props.flag("maker-weather"))
+        r = e.source->rect;
     if (e.source->has("FollowCameraBehaviour"))
         r = shifted(r, cameraX, cameraY);
     if (e.source->base == 5) {

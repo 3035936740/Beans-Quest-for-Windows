@@ -55,6 +55,14 @@
     <ClInclude Include="src\credits_runtime_native.h" />
     <ClInclude Include="src\checks_credits_runtime_native.h" />
     <ClInclude Include="src\ready_native.h" />
+    <ClInclude Include="src\maker.h" />
+    <ClInclude Include="src\maker_state.h" />
+    <ClInclude Include="src\maker_ui.h" />
+    <ClInclude Include="src\maker_data.h" />
+    <ClInclude Include="src\maker_catalog.h" />
+    <ClInclude Include="src\maker_bake.h" />
+    <ClInclude Include="src\maker_editor.h" />
+    <ClInclude Include="src\maker_browser.h" />
     <ClInclude Include="src\checks_ready_native.h" />
     <ClInclude Include="src\platform.h" /><ClInclude Include="src\assets.h" /><ClInclude Include="src\audio.h" /><ClInclude Include="src\effects.h" /><ClInclude Include="src\game.h" /><ClInclude Include="src\physics.h" /><ClInclude Include="src\render.h" /><ClInclude Include="src\interface.h" /><ClInclude Include="src\checks.h" />
     <ClInclude Include="src\checks_av.h" />
@@ -232,11 +240,12 @@
   <Target Name="PrepareRuntimeAssets" BeforeTargets="PrepareForBuild">
     <Exec Command="python &quot;$(ProjectDir)tools\prepare.py&quot;" WorkingDirectory="$(ProjectDir)" Condition="!Exists('$(OutDir)data\Media\project.pgame') Or !Exists('$(OutDir)data\Media\Font\Vera.ttf') Or !Exists('$(OutDir)data\audio\3080012186760326.wav')" />
     <MakeDir Directories="$(OutDir)saves" />
+    <Exec Command="python &quot;$(ProjectDir)tools\prepare_maker_art.py&quot;" WorkingDirectory="$(ProjectDir)" />
+    <MakeDir Directories="$(OutDir)data\Media\Windows\Maker" />
+    <Copy SourceFiles="$(ProjectDir)bin\data\Media\Windows\Maker\scene.ptex;$(ProjectDir)bin\data\Media\Windows\Maker\title.ptex" DestinationFolder="$(OutDir)data\Media\Windows\Maker" SkipUnchangedFiles="true" />
   </Target>
-  <Target Name="CopyRuntimeReadme" AfterTargets="Build">
-    <Copy SourceFiles="$(ProjectDir)README.md" DestinationFolder="$(OutDir)" />
+  <Target Name="CopyRuntimeNotices" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)LICENSE" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="$(ProjectDir)THIRD_PARTY_NOTICES.txt" DestinationFolder="$(OutDir)" />
-    <Copy SourceFiles="$(ProjectDir)PORTING_AUDIT.txt" DestinationFolder="$(OutDir)" />
-    <Copy SourceFiles="$(ProjectDir)NATIVE_REVIEW.md" DestinationFolder="$(OutDir)" />
   </Target>
 </Project>

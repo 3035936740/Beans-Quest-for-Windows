@@ -891,6 +891,21 @@ void beginPlayerWalkMode() {
     sound("axolotl");
 }
 
+void beginPlayerBeanMode() {
+    if (playerIndex < 0)
+        return;
+    playerWalkMode = playerWalkMoving = false;
+    playerWalkAge = playerWalkIdleAge = 0;
+    if (bodies[playerIndex])
+        for (b2Fixture *f = bodies[playerIndex]->GetFixtureList(); f; f = f->GetNext())
+            if (!f->IsSensor()) {
+                b2Filter filter = f->GetFilterData();
+                filter.categoryBits = 2;
+                f->SetFilterData(filter);
+            }
+    sound("axolotl");
+}
+
 // PostPhysicsCollected0x166f88..fa8 disables physics and visibility before
 // calling the derived OnCollected; its effect is emitted afterwards.
 void singleCollectablePostStepNative() {
@@ -920,7 +935,21 @@ void singleCollectablePostStepNative() {
             sound("axolotl");
             entityEffect(e, "CollectableSalamanderBehaviour", "effect");
         } else {
-            beginPlayerWalkMode();
+            // Custom potions record their collection order in an otherwise unused collected
+            // state field, so checkpoints restore the latest target even on a backtracking route.
+            const char *form = e.source->props.get("maker-potion-form");
+            if (*form) {
+                int order = 0;
+                for (int j = 0; j < entityCount; j++)
+                    if (j != i && entities[j].kind == POTION && entities[j].state.gone &&
+                        *entities[j].source->props.get("maker-potion-form"))
+                        order = (int)maxf((float)order, (float)entities[j].state.active);
+                e.state.active = order + 1;
+            }
+            if (e.source->props.flag("maker-potion-form"))
+                beginPlayerBeanMode();
+            else
+                beginPlayerWalkMode();
             entityEffect(e, "UnbeanPotionBehaviour", "effect");
         }
     }
@@ -955,6 +984,9 @@ bool beginEndingSequence() {
         entities[playerIndex].state.x, camX + viewW * 0.5f};
     endingScene.age = 0;
     endingScene.active = 1;
+    // Reaching the rescue cutscene means the Wizard is defeated; it unlocks the course maker.
+    if (!makerRun.active)
+        makerUnlock();
     if (bodies[playerIndex])
         bodies[playerIndex]->SetActive(false);
     applyEndingSequencePose();

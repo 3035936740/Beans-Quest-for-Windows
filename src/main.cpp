@@ -89,8 +89,32 @@ LRESULT CALLBACK procedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             keys[wp] = true;
             if (!(lp & (1L << 30)))
                 keyPressed((int)wp);
+            else
+                makerKeyRepeat((int)wp);
         }
         return 0;
+    case WM_CHAR:
+        makerChar((int)wp);
+        return 0;
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP: {
+        // Only the course editor uses the right and middle buttons.
+        if (!makerScreen())
+            return 0;
+        Vec pointer = nativePointerPosition((float)(short)LOWORD(lp), (float)(short)HIWORD(lp));
+        int button = msg == WM_RBUTTONDOWN || msg == WM_RBUTTONUP ? 1 : 2;
+        if (msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN) {
+            SetCapture(hwnd);
+            makerPointerDown(pointer.x, pointer.y, button);
+        } else {
+            makerPointerUp(pointer.x, pointer.y, button);
+            if (!(wp & (MK_LBUTTON | MK_RBUTTON | MK_MBUTTON)))
+                ReleaseCapture();
+        }
+        return 0;
+    }
     case WM_MOUSEMOVE:
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP: {
@@ -108,8 +132,12 @@ LRESULT CALLBACK procedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_CAPTURECHANGED:
         pointerHeld = readyPointerDown = false;
+        if ((HWND)lp != hwnd)
+            makerCaptureLost();
         return 0;
     case WM_MOUSEWHEEL:
+        if (makerWheel((short)HIWORD(wp)))
+            return 0;
         if (screen == WORLD)
             moveFocus((short)HIWORD(wp) > 0 ? "focus-left" : "focus-right");
         return 0;
@@ -123,6 +151,14 @@ LRESULT CALLBACK procedure(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 toggleFullscreen();
             return 0;
         }
+        // Alt is the course editor's eyedropper modifier; keep it from opening the window menu.
+        if (makerScreen() && (wp == VK_MENU || wp == VK_F10))
+            return 0;
+        break;
+    case WM_SYSKEYUP:
+    case WM_SYSCHAR:
+        if (makerScreen() && (msg == WM_SYSCHAR || wp == VK_MENU || wp == VK_F10))
+            return 0;
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -313,6 +349,7 @@ void check(bool ok, const char *label) {
 #include "checks_ending_transformation.h"
 #include "checks_ending_credits_native.h"
 #include "checks_ending_credits_presentation.h"
+#include "checks_ui_mask_coverage.h"
 #include "checks_credits_runtime_native.h"
 #include "checks_viewport_native.h"
 #include "checks_deadly_native.h"
@@ -417,6 +454,11 @@ void check(bool ok, const char *label) {
 #include "checks_title_idle_native.h"
 #include "checks_wizard_music.h"
 #include "checks_world_select_native.h"
+#include "checks_maker_world_card.h"
+#include "checks_maker_editor.h"
+#include "checks_maker_weather.h"
+#include "checks_maker_water_controls.h"
+#include "checks_switch_visual.h"
 #include "checks_box_push_native.h"
 #include "checks_selector_slope_native.h"
 #include "checks_inherited_box_native.h"
@@ -777,6 +819,7 @@ int selfTest() {
     enemySpeedNativeChecks();
     bulletSourceAnimationNativeChecks();
     readyNativeChecks();
+    uiMaskCoverageChecks();
     wizardSummonWaveNativeChecks();
     wizardRetryRngChecks();
     wizardPresentationChecks();
@@ -929,6 +972,53 @@ extern "C" void WINAPI start() {
         CreateDirectoryA("test-output", 0);
         CreateDirectoryA(saveRoot, 0);
         initAudio(soundFiles, false);
+        if (contains(commandLine, "--self-test-maker-water-controls")) {
+            initInterface();
+            makerGridChecks();
+            makerControlChecks();
+            makerWaterRenderChecks();
+            makerPotionFormChecks();
+            singleCollectableLifecycleNativeChecks();
+            atomicWrite("test-output/maker-water-controls-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
+        if (contains(commandLine, "--self-test-maker-weather")) {
+            initInterface();
+            makerWeatherChecks();
+            potionVisualChecks();
+            switchVisualChecks();
+            continuousParticleNativeChecks();
+            particleBoundsNativeChecks();
+            atomicWrite("test-output/maker-weather-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
+        if (contains(commandLine, "--self-test-maker-editor")) {
+            initInterface();
+            makerEditorChecks();
+            coinSparkleNativeChecks();
+            atomicWrite("test-output/maker-editor-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
+        if (contains(commandLine, "--self-test-ui-masks")) {
+            initInterface();
+            readyNativeChecks();
+            endingCreditsPresentationChecks();
+            uiMaskCoverageChecks();
+            uiMaskCoveragePreviews();
+            atomicWrite("test-output/ui-mask-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
+        if (contains(commandLine, "--self-test-maker-card")) {
+            initInterface();
+            makerWorldCardChecks();
+            atomicWrite("test-output/maker-card-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
         if (contains(commandLine, "--self-test-background-responsive")) {
             backgroundExtensionChecks();
             responsiveBackgroundChecks();
@@ -1692,6 +1782,7 @@ extern "C" void WINAPI start() {
         render();
         Sleep(1);
     }
+    makerShutdown();
     writeProgress();
     titleAttractReset();
     introClose();

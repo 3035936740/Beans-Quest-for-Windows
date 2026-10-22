@@ -245,6 +245,7 @@ Actor *actor(u64 id) {
     if (r.pos != r.size)
         fatal("Unsupported animation data.");
     alignPotionTextureFrames(*a);
+    alignSwitchTextureFrames(*a);
     return a;
 }
 
@@ -341,13 +342,15 @@ struct Level {
     Geometry *geometry;
     int objectCount;
     Object *objects;
+    bool sharedTextures; // textures belong to the maker atlas cache, not to this scene
 };
 
 Level current;
 
 void releaseLevel(Level &l, Arena &memory) {
-    for (int i = 0; i < l.textureCount; i++)
-        glDeleteTextures(1, &l.textures[i].gl);
+    if (!l.sharedTextures)
+        for (int i = 0; i < l.textureCount; i++)
+            glDeleteTextures(1, &l.textures[i].gl);
     memset(&l, 0, sizeof(l));
     memory.reset();
 }

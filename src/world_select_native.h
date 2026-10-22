@@ -13,6 +13,13 @@ struct WorldSelectPointerNative {
 };
 
 WorldSelectPointerNative worldSelectPointerNative;
+// Authored chapters keep slots 1..6. An unlocked Maker occupies slot 0 before Grasslands.
+int worldSelectSlots = 6;
+int worldSelectFirstSlot = 1;
+
+int worldSelectSlot(int world) {
+    return world == 7 ? 0 : world == 4 ? 2 : world == 2 ? 3 : world == 3 ? 4 : world;
+}
 
 void worldSelectBeginNative(WorldSelectPointerNative &p, float x) {
     p = WorldSelectPointerNative{};
@@ -44,12 +51,13 @@ int worldSelectReleaseNative(WorldSelectPointerNative &p, int slot, float x, flo
     if (p.dragged) {
         float displacement = (p.anchorX - x) / scale / 224;
         int delta = (int)(displacement >= 0 ? displacement + .5f : displacement - .5f);
-        result = (int)clamp((float)(slot + delta), 1, 6);
+        int lastSlot = worldSelectFirstSlot + worldSelectSlots - 1;
+        result = (int)clamp((float)(slot + delta), (float)worldSelectFirstSlot, (float)lastSlot);
         if (result == slot && p.age <= .2f) {
             if (x > p.anchorX)
-                result = (int)maxf(1, (float)slot - 1);
+                result = (int)maxf((float)worldSelectFirstSlot, (float)slot - 1);
             else if (x < p.anchorX)
-                result = (int)minf(6, (float)slot + 1);
+                result = (int)minf((float)lastSlot, (float)slot + 1);
         }
     }
     p.down = p.justDown = false;
@@ -71,13 +79,15 @@ double worldSelectLogNative(double x) {
 
 float worldSelectTargetNative(int slot, float drag) {
     float position = (slot - 1) * 224.0f + drag;
-    if (position < 0) {
-        float argument = 1 - position * .02f;
-        return (float)(-50.0 * worldSelectLogNative(argument));
+    float first = (worldSelectFirstSlot - 1) * 224.0f;
+    float last = (worldSelectFirstSlot + worldSelectSlots - 2) * 224.0f;
+    if (position < first) {
+        float argument = 1 + (first - position) * .02f;
+        return (float)(first - 50.0 * worldSelectLogNative(argument));
     }
-    if (position > 1120) {
-        float argument = 1 + (position - 1120) * .02f;
-        return (float)(1120.0 + 50.0 * worldSelectLogNative(argument));
+    if (position > last) {
+        float argument = 1 + (position - last) * .02f;
+        return (float)(last + 50.0 * worldSelectLogNative(argument));
     }
     return position;
 }

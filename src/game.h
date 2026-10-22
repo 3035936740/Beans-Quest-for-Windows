@@ -9,6 +9,7 @@
 #include "collectable_native.h"
 #include "respawn_transition.h"
 #include "ready_native.h"
+#include "maker_state.h"
 RespawnTransition respawnTransition;
 
 enum Kind {
@@ -191,7 +192,9 @@ enum Screen {
     GRAPHICS,
     CONTROLS,
     INTRO,
-    ENDING
+    ENDING,
+    MAKER_BROWSE,
+    MAKER_EDIT
 };
 
 Screen screen = SPLASH;
@@ -299,6 +302,10 @@ Progress progress;
 int stageJumpTarget;
 
 int jumpTargetForStage(int stage) {
+    if (makerRun.active) {
+        int par = (int)current.props.num("bean-jump-par");
+        return makerRun.recordJumps ? (int)minf((float)par, (float)makerRun.recordJumps) : par;
+    }
     if (stage < 0 || stage >= stageCount)
         return 0;
     int par = (int)levels[stageList[stage]].props.num("bean-jump-par");
@@ -1765,7 +1772,11 @@ void initializeEntity(Entity &e, Object &o, Rect r) {
         e.state.active = o.paused ? 0 : 1;
     if (e.orbit)
         positionNativeOrbit(e);
-    initializeCoinAnimationNative(e);
+    if (e.kind == COIN) {
+        // Only custom courses set this property; authored gems retain native random selection.
+        int style = (int)o.props.num("maker-gem-style");
+        initializeCoinAnimationNative(e, style >= 1 && style <= 5 ? style - 1 : -1);
+    }
 }
 
 void addEntity(Object &o, Rect r) {
@@ -2218,7 +2229,8 @@ void captureCheckpoint(bool disk) {
     memcpy(checkpointSourceVisuals, bulletSourceAnimations, sizeof(checkpointSourceVisuals));
     haveCheckpointSourceVisuals = true;
     sourceVisualCheckpointChecksum = checkpoint.checksum;
-    if (disk && !debugMode) {
+    // Custom courses keep checkpoints in memory so the campaign save files stay untouched.
+    if (disk && !debugMode && !makerRun.active) {
         char p[MAX_PATH];
         savePath(p, "checkpoint.dat");
         if (!atomicWrite(p, &checkpoint, sizeof(checkpoint)) || !writeOneWayCheckpointNative(p)) {
@@ -2408,9 +2420,16 @@ void restoreCheckpoint() {
         }
     retainWizardRetryRandom();
     playerWalkMode = false;
+    int potionOrder = -1;
     for (int i = 0; i < entityCount; i++)
-        if (entities[i].kind == POTION && entities[i].state.gone)
-            playerWalkMode = true;
+        if (entities[i].kind == POTION && entities[i].state.gone) {
+            bool custom = *entities[i].source->props.get("maker-potion-form") != 0;
+            int order = custom ? entities[i].state.active : 0;
+            if (order > potionOrder) {
+                potionOrder = order;
+                playerWalkMode = !entities[i].source->props.flag("maker-potion-form");
+            }
+        }
     restorePhysics();
     restoreTouchLoadRuntimeNative(touchLoadRuntime);
     restoreMechanismEventCheckpointNative(checkpoint.state);
@@ -2457,7 +2476,10 @@ void startStage(int stage, bool resume = false) {
     playerInWater = false;
     deathAge = 0;
     currentStage = (int)clamp((float)stage, 0, (float)stageCount - 1);
-    loadLevelData(levels[stageList[currentStage]].file);
+    if (makerRun.active)
+        makerLoadCurrentLevel();
+    else
+        loadLevelData(levels[stageList[currentStage]].file);
     stageJumpTarget = jumpTargetForStage(currentStage);
     alternationBits = initialAlternation();
     buildEntities();
@@ -2478,7 +2500,8 @@ void startStage(int stage, bool resume = false) {
         captureCheckpoint(true);
     }
     playMusic(stageMusic());
-    writeProgress();
+    if (!makerRun.active)
+        writeProgress();
     if (interfaceEnabled)
         stageInterface(resume);
 }
@@ -2589,15 +2612,19 @@ void finish() {
     deactivateGoalBodies();
     if (interfaceEnabled)
         completeInterface();
-    progress.cleared[currentStage] = 1;
-    progress.bestCoins[currentStage] =
-        (int)maxf((float)progress.bestCoins[currentStage], (float)coins);
-    if (progress.bestJumps[currentStage] == 0 || jumps < progress.bestJumps[currentStage])
-        progress.bestJumps[currentStage] = jumps;
-    progress.axolotls[currentStage] |= salamander;
-    progress.unlocked =
-        (int)maxf((float)progress.unlocked, minf((float)currentStage + 1, (float)stageCount - 1));
-    writeProgress();
+    if (makerRun.active)
+        makerRecordClear();
+    else {
+        progress.cleared[currentStage] = 1;
+        progress.bestCoins[currentStage] =
+            (int)maxf((float)progress.bestCoins[currentStage], (float)coins);
+        if (progress.bestJumps[currentStage] == 0 || jumps < progress.bestJumps[currentStage])
+            progress.bestJumps[currentStage] = jumps;
+        progress.axolotls[currentStage] |= salamander;
+        progress.unlocked = (int)maxf((float)progress.unlocked,
+                                      minf((float)currentStage + 1, (float)stageCount - 1));
+        writeProgress();
+    }
     stopMusic();
     sound("fanfare");
     sound("bean-win");
@@ -2618,7 +2645,8 @@ void shoot(Entity &turret, const Props &props) {
         alignBulletSourceAimNative(turret, props, aim, sourceTargetNative(props));
     float angle = aim.angle;
     const Props *bp = classes[index].behavior("EnemyBulletBehaviour");
-    float speed = bp ? bp->num("speed", 125) : 125;
+    // Course-maker sources may override the bullet class speed; authored sources never set it.
+    float speed = props.num("bulletSpeed", bp ? bp->num("speed", 125) : 125);
     int owner = (int)(&turret - entities) + 1, active = 0;
     for (int i = 0; i < MAX_PROJECTILES; i++)
         if (bullets[i].life > 0 && bullets[i].state.active == owner)

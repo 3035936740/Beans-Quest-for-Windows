@@ -5,6 +5,13 @@ void worldSelectNativeChecks() {
     bool oldInterface = interfaceEnabled, oldMusic = musicEnabled, oldSound = soundEnabled,
          oldDebug = debugMode;
     Progress oldProgress = progress;
+    MakerProfile oldMakerProfile = makerProfile;
+    bool oldMakerLoaded = makerProfileLoaded;
+    // These are the six original campaign-card cases. Previous tests can
+    // unlock Maker; isolate that profile here and cover the seventh card in
+    // makerWorldCardChecks instead of depending on test execution order.
+    makerProfile = MakerProfile{};
+    makerProfileLoaded = true;
     float oldW = viewW, oldH = viewH, oldScale = screenScale;
     int oldStage = currentStage;
     musicEnabled = soundEnabled = debugMode = false;
@@ -183,4 +190,6 @@ void worldSelectNativeChecks() {
     soundEnabled = oldSound;
     debugMode = oldDebug;
     progress = oldProgress;
+    makerProfile = oldMakerProfile;
+    makerProfileLoaded = oldMakerLoaded;
 }
