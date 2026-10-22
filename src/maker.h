@@ -388,9 +388,14 @@ void makerDrawChapterIllustration(UiScene &s, UiNode &n, bool title = true) {
 bool makerDrawWorldNode(UiScene &s, UiNode &n) {
     if (&s != &page || !n.object || n.object->id != MAKER_WORLD_NODE)
         return false;
-    makerDrawChapterIllustration(s, n);
+    makerDrawChapterIllustration(s, n, false);
+    int index = (int)(&n - s.nodes);
+    if (pointerHeld && !pointerDragged && pointerScene == s.level.id && pointerNode == index &&
+        !n.disabled)
+        mkRect(n.rect.l, n.rect.b, n.rect.r - n.rect.l, n.rect.t - n.rect.b, 0x000000b3);
+    makerCardTitle(center(n.rect));
     Vec c = center(n.rect);
-    float l = c.x - 96, b = c.y - 96;
+    float b = c.y - 96;
     char caption[32];
     wsprintfA(caption, "%d course%s", makerCourseCount, makerCourseCount == 1 ? "" : "s");
     // Use the chapter font at a readable native size; tiny bold glyphs looked flattened.
@@ -400,9 +405,6 @@ bool makerDrawWorldNode(UiScene &s, UiNode &n) {
         makerCardGlyph(font, caption[i], x, b - 14, 0, 0xffffffff, 0xffffffff);
         x += font.width[(u8)caption[i]];
     }
-    makerReadProfile();
-    if (!makerProfile.seen && ((int)(s.age * 3) & 1))
-        mkTextShadow(l + 120, b + 160, "NEW!", 12, 0xff5050ff, true);
     return true;
 }
 
@@ -498,10 +500,10 @@ void makerRenderPlayOverlay() {
         return;
     const char *text = makerPlayFromCursor ? "TEST FROM CURSOR   F5 / Tab: back to the editor"
                                            : "TEST PLAY   F5 / Tab: back to the editor";
-    float size = 8, w = mkTextWidth(text, size, true) + 14, h = 15;
+    float size = 8, w = mkTextWidth(text, size, true) + 16, h = 15;
     float x = (viewW - w) * 0.5f, y = 4;
-    mkRect(x, y, w, h, 0x00000080);
-    mkText(x + 7, y + (h - mkLineHeight(size, true)) * 0.5f, text, size, 0xffffffd0, true);
+    mkHudPlate(mkBox(x, y, w, h));
+    mkText(x + 8, y + (h - mkLineHeight(size, true)) * 0.5f, text, size, 0xffffffff, true);
 }
 
 // Closing the window keeps unsaved editor work.

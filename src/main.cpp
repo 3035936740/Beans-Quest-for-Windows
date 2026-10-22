@@ -200,6 +200,7 @@ void initWindow(bool hidden) {
     pfd.iPixelType = PFD_TYPE_RGBA;
     pfd.cColorBits = 24;
     pfd.cAlphaBits = 8;
+    pfd.cStencilBits = 8;
     pfd.iLayerType = PFD_MAIN_PLANE;
     int pf = ChoosePixelFormat(gameDC, &pfd);
     if (!pf || !SetPixelFormat(gameDC, pf, &pfd))
@@ -458,6 +459,7 @@ void check(bool ok, const char *label) {
 #include "checks_maker_editor.h"
 #include "checks_maker_weather.h"
 #include "checks_maker_water_controls.h"
+#include "checks_maker_layout.h"
 #include "checks_switch_visual.h"
 #include "checks_box_push_native.h"
 #include "checks_selector_slope_native.h"
@@ -972,6 +974,16 @@ extern "C" void WINAPI start() {
         CreateDirectoryA("test-output", 0);
         CreateDirectoryA(saveRoot, 0);
         initAudio(soundFiles, false);
+        if (contains(commandLine, "--self-test-maker-layout")) {
+            initInterface();
+            makerLayoutPreviews();
+            makerChapterPressChecks();
+            makerHeldButtonChecks();
+            makerEraseRectangleChecks();
+            atomicWrite("test-output/maker-layout-results.txt", testLog, lstrlenA(testLog));
+            shutdownAudio();
+            ExitProcess(failures ? 1 : 0);
+        }
         if (contains(commandLine, "--self-test-maker-water-controls")) {
             initInterface();
             makerGridChecks();

@@ -1,7 +1,9 @@
 #pragma once
 
-// Course list of the maker chapter: pages of course cards with schematic thumbnails, award badges
-// and verification state. Creating a course asks for a theme first, like choosing a course style.
+// Course list of the maker chapter, laid out like a world's level select: the MAKER logo over the
+// menu sky and pages of course cards framed in the colour of each course's theme, each with a
+// photo of its opening screen and the level-select award badges. A new course first picks its
+// theme from the world logos.
 
 enum MakerBrowserCommand {
     BCMD_NONE,
@@ -17,13 +19,13 @@ enum MakerBrowserCommand {
     BCMD_THEME,
     BCMD_THEME_CANCEL,
     BCMD_CONFIRM_DELETE,
-    BCMD_CONFIRM_CANCEL
+    BCMD_CONFIRM_CANCEL,
+    BCMD_MUSIC
 };
 
 struct MakerBrowser {
     MakerHeader heads[MAKER_SLOTS];
-    bool exists[MAKER_SLOTS], thumbValid[MAKER_SLOTS];
-    GLuint thumbs[MAKER_SLOTS];
+    bool exists[MAKER_SLOTS];
     int selected, page;
     int confirm, confirmFocus; // slot awaiting delete confirmation (-1 none); 1 focuses Delete
     float age, mouseX, mouseY, lastClick, lastClickX, lastClickY;
@@ -37,68 +39,110 @@ MakerLevel makerPlayCourse, makerCopyCourse;
 void makerStartCourse(int slot);
 void makerEditCourse(int slot, bool fresh, int theme);
 void makerLeaveBrowser();
+void makerLoadChapterArtwork();
+extern Texture makerCardTitleTexture;
+
+// Course photos: the opening screen of each course on the page, drawn with its own bricks and
+// items. Only the pieces around the start are kept, and one course is read per frame.
+enum { BR_PHOTO_TILES = 640, BR_PHOTO_OBJECTS = 96 };
+
+const float BR_PHOTO_W = 432, BR_PHOTO_H = 144;
+
+struct MakerPhoto {
+    bool ready;
+    int slot, tileCount, objectCount;
+    Rect view;
+    MakerTile tiles[BR_PHOTO_TILES];
+    MakerObject objects[BR_PHOTO_OBJECTS];
+};
+
+MakerPhoto makerPhotos[MAKER_PAGE];
+MakerLevel makerPhotoCourse;
+
+// Sky behind each theme's photos, top then horizon.
+const u32 brPhotoSky[6][2] = {{0x57c4ffff, 0xc8ecffff}, {0x57c4ffff, 0xc8ecffff},
+                              {0x6a5acdff, 0xd8a8f0ff}, {0xff9a2eff, 0xffe7a0ff},
+                              {0xe0407aff, 0xffa040ff}, {0x1a1030ff, 0x4a2a60ff}};
 
 void brRefresh() {
-    for (int i = 0; i < MAKER_SLOTS; i++) {
+    for (int i = 0; i < MAKER_SLOTS; i++)
         makerBrowser.exists[i] = makerLoadHeader(i, makerBrowser.heads[i]);
-        makerBrowser.thumbValid[i] = false;
+    for (int i = 0; i < MAKER_PAGE; i++)
+        makerPhotos[i].ready = false;
+}
+
+// Keep the bricks and items of a course's opening screen for its card.
+void brBuildPhoto(int slot) {
+    MakerPhoto &p = makerPhotos[slot % MAKER_PAGE];
+    p.ready = true;
+    p.slot = slot;
+    p.tileCount = p.objectCount = 0;
+    if (!makerLoadLevel(slot, makerPhotoCourse))
+        return;
+    const MakerLevel &l = makerPhotoCourse;
+    const MakerHeader &h = l.head;
+    float x = clamp(h.startX - 96, 0, maxf(0, h.width - BR_PHOTO_W));
+    float y = clamp(h.startY - 88, 0, maxf(0, h.height - BR_PHOTO_H));
+    p.view = mkBox(x, y, BR_PHOTO_W, BR_PHOTO_H);
+    for (int i = 0; i < l.tileCount && p.tileCount < BR_PHOTO_TILES; i++) {
+        const MakerTile &t = l.tiles[i];
+        if (t.r > p.view.l && t.l < p.view.r && t.t > p.view.b && t.b < p.view.t)
+            p.tiles[p.tileCount++] = t;
+    }
+    for (int i = 0; i < l.objectCount && p.objectCount < BR_PHOTO_OBJECTS; i++) {
+        const MakerObject &o = l.objects[i];
+        const MakerObjectDef *d = makerDefFor(o.klass);
+        Rect r = edObjectRect(o);
+        if (d && !(d->flags & (OBJ_FREE | OBJ_INVISIBLE | OBJ_START)) && r.r > p.view.l - 64 &&
+            r.l < p.view.r + 64 && r.t > p.view.b - 64 && r.b < p.view.t + 64)
+            p.objects[p.objectCount++] = o;
     }
 }
 
-u32 brThumbColor(int code, int theme) {
-    const u32 sky[6] = {0x5a8cc8ff, 0x5a8cc8ff, 0x7aa0d8ff, 0xe0a070ff, 0xd89060ff, 0x6a5aa0ff};
-    switch (code) {
-    case THUMB_SKY:
-        return sky[(int)clamp((float)theme, 0, 5)];
-    case THUMB_BACK:
-        return 0x40506aff;
-    case THUMB_SOLID:
-        return 0x8a6a46ff;
-    case THUMB_DECOR:
-        return 0x6aa85aff;
-    case THUMB_FRONT:
-        return 0x3c6a40ff;
-    case THUMB_HAZARD:
-        return 0xe04848ff;
-    case THUMB_ITEM:
-        return 0x60e0ffff;
-    case THUMB_GOAL:
-        return 0xffd840ff;
-    case THUMB_OBJECT:
-        return 0xd8d8e0ff;
-    case THUMB_START:
-        return 0x80ff80ff;
-    }
-    return 0x141820ff;
-}
-
-GLuint brThumb(int slot) {
-    if (makerBrowser.thumbValid[slot])
-        return makerBrowser.thumbs[slot];
+// The photo covers the box from its bottom-left corner, so the ground and Bean stay in view.
+void brDrawPhoto(int slot, Rect box) {
     const MakerHeader &h = makerBrowser.heads[slot];
-    u8 pixels[MAKER_THUMB_W * MAKER_THUMB_H * 4];
-    for (int i = 0; i < MAKER_THUMB_W * MAKER_THUMB_H; i++) {
-        u32 c = brThumbColor(h.thumb[i], h.theme);
-        pixels[i * 4] = (u8)(c >> 24);
-        pixels[i * 4 + 1] = (u8)(c >> 16);
-        pixels[i * 4 + 2] = (u8)(c >> 8);
-        pixels[i * 4 + 3] = (u8)c;
+    const u32 *sky = brPhotoSky[(int)clamp((float)h.theme, 1, 5)];
+    mkGradient(box.l, box.b, box.r - box.l, box.t - box.b, sky[1], sky[0]);
+    const MakerPhoto &p = makerPhotos[slot % MAKER_PAGE];
+    if (!p.ready || p.slot != slot)
+        return;
+    float scale = maxf((box.r - box.l) / BR_PHOTO_W, (box.t - box.b) / BR_PHOTO_H);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(viewportX + makerRound(box.l * screenScale),
+              viewportY + makerRound(box.b * screenScale),
+              makerRound((box.r - box.l) * screenScale), makerRound((box.t - box.b) * screenScale));
+    glPushMatrix();
+    glTranslatef(box.l, box.b, 0);
+    glScalef(scale, scale, 1);
+    glTranslatef(-p.view.l, -p.view.b, 0);
+    for (int layer = 0; layer < MAKER_LAYERS; layer++) {
+        if (layer == MAKER_FRONT) {
+            for (int i = 0; i < p.objectCount; i++)
+                edDrawObject(p.objects[i], 0, 0, 1, -1, false);
+            edDrawStartBean(makerCentered(h.startX, h.startY, 32, 32));
+        }
+        // Main-layer blocks come before overlays such as grass, as in the editor.
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < p.tileCount; i++) {
+                const MakerTile &t = p.tiles[i];
+                bool opaque = (t.flags & TILE_OPAQUE) != 0;
+                if (t.layer == layer && (layer == MAKER_MAIN ? (pass == 0) == opaque : pass == 0))
+                    edDrawTile(t, 0, 0, 1);
+            }
     }
-    if (!makerBrowser.thumbs[slot])
-        glGenTextures(1, &makerBrowser.thumbs[slot]);
-    glBindTexture(GL_TEXTURE_2D, makerBrowser.thumbs[slot]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, MAKER_THUMB_W, MAKER_THUMB_H, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, pixels);
-    makerBrowser.thumbValid[slot] = true;
-    return makerBrowser.thumbs[slot];
+    glPopMatrix();
+    glDisable(GL_SCISSOR_TEST);
 }
 
 int brCoinGoal(const MakerHeader &h) {
     return h.coinGoal > 0 && h.coinGoal < h.coins ? h.coinGoal : h.coins;
+}
+
+// Every award of the course: its gems, the gold shoe and its axolotl.
+bool brPerfect(const MakerHeader &h) {
+    return h.cleared && (h.coins <= 0 || h.bestCoins >= brCoinGoal(h)) &&
+           h.bestJumps <= h.jumpBest && (!h.hasAxolotl || h.axolotl);
 }
 
 void brBadges(const MakerHeader &h, float x, float y, float size) {
@@ -119,91 +163,159 @@ void brBadges(const MakerHeader &h, float x, float y, float size) {
         drawActor(axolotl, mkBox(x, y, size, size), h.axolotl ? "on" : "off", 0);
 }
 
-void brCard(int slot, Rect r) {
-    bool selected = slot == makerBrowser.selected;
-    bool hover = mkInside(r, makerBrowser.mouseX, makerBrowser.mouseY);
-    float w = r.r - r.l, h = r.t - r.b;
-    u32 top = selected ? 0x3e5f8aff : hover ? 0x30496aff : 0x223349ff;
-    mkGradient(r.l, r.b, w, h, 0x141f2cff, top);
-    mkFrame(r.l, r.b, w, h, selected ? 0xffe070ff : 0x4a6584ff, selected ? 2 / screenScale : 0);
-    char label[64];
-    wsprintfA(label, "C-%02d", slot + 1);
-    mkText(r.l + 5, r.t - 13, label, 8, 0x9fb4c8ff, true);
-    if (!makerBrowser.exists[slot]) {
-        mkTextCentered((r.l + r.r) * 0.5f, (r.b + r.t) * 0.5f, "+ New course", 9,
-                       hover || selected ? 0xffffffff : 0x8fa3b8ff, true);
+// The chapter's MAKER logo, cut from the illustrated title layer of the world select card.
+void brDrawLogo(float cx, float cy, float height) {
+    makerLoadChapterArtwork();
+    const Texture &t = makerCardTitleTexture;
+    if (!t.gl)
         return;
-    }
-    const MakerHeader &head = makerBrowser.heads[slot];
-    mkFitText(label, sizeof(label), head.name, r.r - r.l - 39, 8.5f, true);
-    mkText(r.l + 34, r.t - 13, label, 8.5f, 0xffffffff, true);
-    float tw = w - 10, th = tw * MAKER_THUMB_H / MAKER_THUMB_W;
-    if (th > h - 40) {
-        th = h - 40;
-        tw = th * MAKER_THUMB_W / MAKER_THUMB_H;
-    }
-    float tx = r.l + (w - tw) * 0.5f, ty = r.t - 17 - th;
+    // Bounds of the lettering on the 832x1024 canvas.
+    const float l = 54, top = 60, r = 757, bottom = 278;
+    float w = height * (r - l) / (bottom - top);
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, brThumb(slot));
+    glBindTexture(GL_TEXTURE_2D, t.gl);
+    // The painted logo is shown well below its source size, so filter it smoothly.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glColor4f(1, 1, 1, 1);
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(tx, ty);
-    glTexCoord2f(1, 0);
-    glVertex2f(tx + tw, ty);
-    glTexCoord2f(1, 1);
-    glVertex2f(tx + tw, ty + th);
-    glTexCoord2f(0, 1);
-    glVertex2f(tx, ty + th);
+    glTexCoord2f(l / t.width, bottom / t.height);
+    glVertex2f(cx - w * 0.5f, cy - height * 0.5f);
+    glTexCoord2f(r / t.width, bottom / t.height);
+    glVertex2f(cx + w * 0.5f, cy - height * 0.5f);
+    glTexCoord2f(r / t.width, top / t.height);
+    glVertex2f(cx + w * 0.5f, cy + height * 0.5f);
+    glTexCoord2f(l / t.width, top / t.height);
+    glVertex2f(cx - w * 0.5f, cy + height * 0.5f);
     glEnd();
-    mkFrame(tx, ty, tw, th, 0x00000080);
-    brBadges(head, r.l + 5, r.b + 4, 12);
-    if (head.flags & MAKER_VERIFIED)
-        mkText(r.r - mkTextWidth("Verified", 7.5f, true) - 5, r.b + 5, "Verified", 7.5f, 0x80ff80ff,
-               true);
-    else
-        mkText(r.r - mkTextWidth("Not verified", 7.5f) - 5, r.b + 5, "Not verified", 7.5f,
-               0x8090a0ff);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+}
+
+// Slot number in yellow on a black capsule, like the pause captions.
+Rect brNumber(int slot, float x, float y, float h, float alpha = 1) {
+    char text[8];
+    wsprintfA(text, "%02d", slot + 1);
+    Rect r = mkBox(x, y, mkTextWidth(text, 7.5f, true) + 9, h);
+    mkPill(r, alpha);
+    mkTextCentered((r.l + r.r) * 0.5f, (r.b + r.t) * 0.5f, text, 7.5f,
+                   0xffee3300 | (u32)(int)(255 * alpha), true);
+    return r;
+}
+
+void brCard(int slot, Rect r) {
+    MakerBrowser &b = makerBrowser;
+    bool selected = slot == b.selected;
+    bool hover = b.confirm < 0 && !b.themePicker && mkInside(r, b.mouseX, b.mouseY);
+    bool held = hover && mkKeyDown(VK_LBUTTON);
+    float w = r.r - r.l, h = r.t - r.b, pad = 5, rowH = 11;
+    Rect focus = {r.l - 2, r.b - 2, r.r + 2, r.t + 2};
+    if (!b.exists[slot]) {
+        // Free slots are the pressed level button, faded into the sky.
+        mkWorldFrame(r, 1, "down", hover ? 0.75f : 0.45f);
+        brNumber(slot, r.l + pad, r.t - pad - rowH, rowH, 0.8f);
+        float cx = (r.l + r.r) * 0.5f, cy = (r.b + r.t) * 0.5f;
+        mkLabelCentered(cx, cy + h * 0.08f, "+", minf(18, h * 0.25f), 0xffffffff);
+        mkLabelCentered(cx, cy - h * 0.16f, "New course", 8, hover ? 0xffffffff : 0xe8f0e0ff);
+        if (selected)
+            mkBrackets(focus, 6);
+        return;
+    }
+    const MakerHeader &head = b.heads[slot];
+    int theme = (int)clamp((float)head.theme, 1, 5);
+    mkWorldFrame(r, theme, held ? "down" : "up", 1, hover ? 0.16f : 0);
+    Rect number = brNumber(slot, r.l + pad, r.t - pad - rowH, rowH);
+    char name[64];
+    mkFitText(name, sizeof(name), head.name, r.r - pad - number.r - 4, 8.5f, true);
+    mkLabel(number.r + 4, (number.b + number.t - mkLineHeight(8.5f, true)) * 0.5f, name, 8.5f,
+            0xffffffff);
+    // The photo sits in the stage-clear score box; badges and the clear check run underneath.
+    float badge = clamp(h * 0.14f, 8, 11);
+    Rect frame = {r.l + pad - 1, r.b + pad + badge + 1, r.r - pad + 1, number.b - 2};
+    mkInset(frame);
+    mkBeginPhotoMask(frame);
+    brDrawPhoto(slot, frame);
+    glDisable(GL_STENCIL_TEST);
+    brBadges(head, r.l + pad, r.b + pad - 1, badge);
+    bool verified = (head.flags & MAKER_VERIFIED) != 0;
+    // Move the whole verification group clear of the frame; its label follows this rectangle.
+    Rect tick = mkBox(r.r - pad - badge - 3, r.b + pad - 1, badge, badge);
+    mkSprite(MKART_CHECK, verified ? "up-on" : "up-off", tick);
+    const char *state = verified ? "Verified" : "Not verified";
+    float tw = mkTextWidth(state, 7, true);
+    if (tw + badge * 5 + 16 < w)
+        mkLabel(tick.l - tw - (verified ? 3 : 6), (tick.b + tick.t - mkLineHeight(7, true)) * 0.5f, state, 7,
+                verified ? 0xffffffff : 0xd8d8d8ff);
+    if (selected)
+        mkBrackets(focus, 6);
+}
+
+// Awards form one foreground pass after every card, including neighbouring frames and focus marks.
+void brCardAward(int slot, Rect r) {
+    if (makerBrowser.exists[slot] && brPerfect(makerBrowser.heads[slot]))
+        mkSprite(MKART_STAR, "", makerCentered(r.r - 3, r.t - 3, 30, 30),
+                 1, 0, -135 * makerBrowser.age);
+}
+
+// A theme choice: the normal green button recoloured in code, with its original world logo.
+void brThemeChoice(MakerButton &btn) {
+    MakerBrowser &b = makerBrowser;
+    bool hover = mkInside(btn.r, b.mouseX, b.mouseY), held = hover && mkKeyDown(VK_LBUTTON);
+    float h = btn.r.t - btn.r.b;
+    mkButtonArt(btn.r, held, hover, btn.disabled, btn.arg);
+    char key[4];
+    wsprintfA(key, "%d", btn.arg);
+    Rect pill = mkBox(btn.r.l + 6, (btn.r.b + btn.r.t) * 0.5f - 6, 14, 12);
+    mkPill(pill);
+    mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, key, 7.5f, 0xffee33ff, true);
+    mkSpriteFit(MKART_WORLD_TITLE[btn.arg], "",
+                Rect{pill.r + 6, btn.r.b + 3, btn.r.r - pill.r + btn.r.l - 6, btn.r.t - 3});
+    if (hover)
+        mkBrackets(Rect{btn.r.l - 2, btn.r.b - 2, btn.r.r + 2, btn.r.t + 2}, minf(6, h * 0.3f));
 }
 
 void brRender() {
     MakerBrowser &b = makerBrowser;
     b.buttons.clear();
     b.rendered = true;
-    mkGradient(0, 0, viewW, viewH, 0x0b1a2aff, 0x2b5a7aff);
-    for (int i = 0; i < 9; i++) {
-        float x = makerFloor(b.age * 12 + i * 120) % (int)(viewW + 240) - 120.0f;
-        mkRect(x, viewH - 40 - (i % 3) * 30, 90, 10, 0xffffff10);
-    }
+    mkSky(b.age);
     if (b.loading || !makerCatalogReady) {
-        mkTextCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff,
-                       true);
+        mkLabelCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff);
         return;
     }
-    float titleH = 30;
-    mkTextShadow(12, viewH - 24, "COURSE MAKER", 14, 0xfff2b0ff, true);
+    // Header: back button, logo and page selector, as on a world's level select.
+    float margin = 10, headerH = clamp(viewH * 0.17f, 44, 66), cy = viewH - headerH * 0.5f;
+    MakerButton *back = b.buttons.add(mkBox(margin - 4, cy - 18, 36, 36), BCMD_BACK, 0);
+    mkDrawIcon(*back, MKART_BACK, b.mouseX, b.mouseY);
+    brDrawLogo(viewW * 0.5f, cy, headerH - 8);
     char text[64];
     int pages = MAKER_SLOTS / MAKER_PAGE;
-    wsprintfA(text, "Page %d / %d", b.page + 1, pages);
-    float pw = mkTextWidth(text, 9, true);
-    MakerButton *prev =
-        b.buttons.add(mkBox(viewW - pw - 70, viewH - 25, 22, 18), BCMD_PAGE, "<", -1);
-    mkDrawButton(*prev, b.mouseX, b.mouseY, 9);
-    mkText(viewW - pw - 44, viewH - 22, text, 9, 0xffffffff, true);
-    MakerButton *next = b.buttons.add(mkBox(viewW - 38, viewH - 25, 22, 18), BCMD_PAGE, ">", 1);
-    mkDrawButton(*next, b.mouseX, b.mouseY, 9);
-    float barH = 30, margin = 10, gap = 6, infoH = 12;
-    float gridTop = viewH - titleH - 4, gridBottom = barH + infoH + 6;
+    wsprintfA(text, "%d / %d", b.page + 1, pages);
+    float arrow = 24, pw = mkTextWidth(text, 9, true) + 16;
+    float x = viewW - margin - arrow * 2 - pw - 4;
+    MakerButton *prev = b.buttons.add(mkBox(x, cy - arrow * 0.5f, arrow, arrow), BCMD_PAGE, 0, -1);
+    mkDrawArrow(*prev, true, b.mouseX, b.mouseY);
+    Rect pill = mkBox(prev->r.r + 2, cy - 7, pw, 14);
+    mkPill(pill);
+    mkTextCentered((pill.l + pill.r) * 0.5f, cy, text, 9, 0xffffffff, true);
+    MakerButton *next =
+        b.buttons.add(mkBox(pill.r + 2, cy - arrow * 0.5f, arrow, arrow), BCMD_PAGE, 0, 1);
+    mkDrawArrow(*next, false, b.mouseX, b.mouseY);
+    // Course cards.
+    float barH = 26, infoH = 13, gap = 7;
+    float gridTop = viewH - headerH, gridBottom = barH + infoH + 9;
     int columns = 4, rows = MAKER_PAGE / columns;
     float cw = (viewW - margin * 2 - gap * (columns - 1)) / columns;
     float ch = (gridTop - gridBottom - gap * (rows - 1)) / rows;
+    Rect cardRects[MAKER_PAGE];
     for (int i = 0; i < MAKER_PAGE; i++) {
         int slot = b.page * MAKER_PAGE + i;
         int c = i % columns, r = i / columns;
         Rect card = mkBox(margin + c * (cw + gap), gridTop - (r + 1) * ch - r * gap, cw, ch);
+        cardRects[i] = card;
         brCard(slot, card);
         b.buttons.add(card, BCMD_CARD, 0, slot);
     }
+    for (int i = 0; i < MAKER_PAGE; i++)
+        brCardAward(b.page * MAKER_PAGE + i, cardRects[i]);
     bool exists = b.exists[b.selected];
 
     struct Spec {
@@ -217,26 +329,32 @@ void brRender() {
                           {"Edit", "Edit (E)", BCMD_EDIT, !exists},
                           {"New", "New (N)", BCMD_NEW, exists},
                           {"Copy", "Copy (C)", BCMD_COPY, !exists},
-                          {"Delete", "Delete (Del)", BCMD_DELETE, !exists},
-                          {"Back", "Back (Esc)", BCMD_BACK, false}};
-    float keyedW = margin * 2 + 20;
-    for (int i = 0; i < 6; i++)
-        keyedW += mkTextWidth(specs[i].keyed, 9, true) + 26;
+                          {"Delete", "Delete (Del)", BCMD_DELETE, !exists}};
+    const int specCount = (int)(sizeof(specs) / sizeof(specs[0]));
+    float size = 9, music = 24, keyedW = margin * 2 + music + 8;
+    for (int i = 0; i < specCount; i++)
+        keyedW += mkButtonWidth(specs[i].keyed, size) + 4;
     bool keyed = keyedW < viewW;
-    float x = margin;
-    for (int i = 0; i < 6; i++) {
+    x = margin;
+    for (int i = 0; i < specCount; i++) {
         const char *label = keyed ? specs[i].keyed : specs[i].label;
-        float w = mkTextWidth(label, 9, true) + 22;
-        if (i == 5)
-            x = viewW - margin - w;
-        MakerButton *btn = b.buttons.add(mkBox(x, 6, w, barH - 10), specs[i].id, label, 0, false,
+        float w = mkButtonWidth(label, size);
+        MakerButton *btn = b.buttons.add(mkBox(x, 6, w, barH - 6), specs[i].id, label, 0, false,
                                          specs[i].disabled);
-        mkDrawButton(*btn, b.mouseX, b.mouseY, 9);
+        mkDrawButton(*btn, b.mouseX, b.mouseY, size,
+                     specs[i].id == BCMD_DELETE ? 0xc80f0fff : 0x000000ff);
         x += w + 4;
     }
+    // The title screen's music toggle; M does the same.
+    MakerButton *tune =
+        b.buttons.add(mkBox(viewW - margin - music, 4, music, music), BCMD_MUSIC, 0);
+    bool tuneDown = mkInside(tune->r, b.mouseX, b.mouseY) && mkKeyDown(VK_LBUTTON);
+    mkSprite(MKART_MUSIC,
+             musicEnabled ? (tuneDown ? "down-on" : "up-on") : (tuneDown ? "down-off" : "up-off"),
+             tune->r);
+    char info[128], fitted[128];
     if (exists) {
         const MakerHeader &h = b.heads[b.selected];
-        char info[128];
         if (h.cleared)
             wsprintfA(info, "%s   %d tiles long   Best %d jumps   Gems %d/%d",
                       makerThemeNames[(int)clamp((float)h.theme, 1, 5)], h.width / 32, h.bestJumps,
@@ -245,42 +363,50 @@ void brRender() {
             wsprintfA(info, "%s   %d tiles long   Par %d   Gold shoe %d",
                       makerThemeNames[(int)clamp((float)h.theme, 1, 5)], h.width / 32, h.jumpPar,
                       h.jumpBest);
-        char fitted[128];
-        mkFitText(fitted, sizeof(fitted), info, viewW - margin * 2, 8, false);
-        mkText(margin, barH - 2, fitted, 8, 0xc8d8e8ff);
-    }
+    } else
+        wsprintfA(info, "C-%02d is free   New (N) or a double-click starts a course here",
+                  b.selected + 1);
+    mkFitText(fitted, sizeof(fitted), info, viewW - margin * 2 - 12, 8, false);
+    mkHudPlate(mkBox(margin, barH + 4, mkTextWidth(fitted, 8) + 12, infoH));
+    mkText(margin + 6, barH + 4 + (infoH - mkLineHeight(8)) * 0.5f, fitted, 8, 0xffffffff);
     if (b.themePicker) {
         b.buttons.add(mkBox(0, 0, viewW, viewH), BCMD_THEME_CANCEL, 0);
-        mkRect(0, 0, viewW, viewH, 0x00000090);
-        float w = minf(300, viewW - 20), h = 168, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
-        mkPanel(px, py, w, h);
+        mkShade(0.85f);
+        float rowH = clamp((viewH - 100) / 5, 24, 34);
+        float w = minf(300, viewW - 20), h = rowH * 5 + 36, px = (viewW - w) * 0.5f,
+              py = (viewH - h) * 0.5f - 6;
+        mkGreenPanel(mkBox(px, py, w, h));
         b.buttons.add(mkBox(px, py, w, h), BCMD_BACKDROP, 0);
-        mkTextCentered(viewW * 0.5f, py + h - 16, "Choose a theme", 11, 0xfff2b0ff, true);
+        mkPanelTitle(viewW * 0.5f, py + h, "Choose a theme");
         for (int t = 1; t <= 5; t++) {
-            MakerButton *btn = b.buttons.add(mkBox(px + 20, py + h - 30 - t * 24, w - 40, 20),
-                                             BCMD_THEME, makerThemeNames[t], t);
-            mkDrawButton(*btn, b.mouseX, b.mouseY, 9.5f);
+            MakerButton *btn =
+                b.buttons.add(mkBox(px + 14, py + h - 18 - t * rowH, w - 28, rowH - 4), BCMD_THEME,
+                              makerThemeNames[t], t);
+            brThemeChoice(*btn);
         }
     }
     if (b.confirm >= 0) {
         // In-game confirmation; a system dialog could hide behind the fullscreen window.
         b.buttons.add(mkBox(0, 0, viewW, viewH), BCMD_CONFIRM_CANCEL, 0);
-        mkRect(0, 0, viewW, viewH, 0x00000090);
-        float w = minf(320, viewW - 20), h = 92, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
-        mkPanel(px, py, w, h);
+        mkShade(0.85f);
+        float w = minf(320, viewW - 20), h = 100, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
+        mkGreenPanel(mkBox(px, py, w, h));
         b.buttons.add(mkBox(px, py, w, h), BCMD_BACKDROP, 0);
+        mkPanelTitle(viewW * 0.5f, py + h, "Delete course?");
         char name[64], question[96];
-        mkFitText(name, sizeof(name), b.heads[b.confirm].name, w - 120, 10, true);
-        wsprintfA(question, "Delete C-%02d \"%s\"?", b.confirm + 1, name);
-        mkTextCentered(viewW * 0.5f, py + h - 20, question, 10, 0xfff2b0ff, true);
-        mkTextCentered(viewW * 0.5f, py + h - 38, "The course and its records cannot be restored.",
-                       8, 0xc8d8e8ff);
-        MakerButton *yes = b.buttons.add(mkBox(viewW * 0.5f - 96, py + 10, 88, 20),
-                                         BCMD_CONFIRM_DELETE, "Delete", 0, b.confirmFocus == 1);
-        mkDrawButton(*yes, b.mouseX, b.mouseY, 9.5f);
-        MakerButton *no = b.buttons.add(mkBox(viewW * 0.5f + 8, py + 10, 88, 20),
-                                        BCMD_CONFIRM_CANCEL, "Cancel", 0, b.confirmFocus == 0);
+        mkFitText(name, sizeof(name), b.heads[b.confirm].name, w - 90, 10, true);
+        wsprintfA(question, "C-%02d \"%s\"", b.confirm + 1, name);
+        mkTextCentered(viewW * 0.5f, py + h - 30, question, 10, 0x000000ff, true);
+        mkTextCentered(viewW * 0.5f, py + h - 47, "The course and its records cannot be restored.",
+                       8, 0x1e3200ff);
+        MakerButton *yes =
+            b.buttons.add(mkBox(viewW * 0.5f - 96, py + 14, 88, 22), BCMD_CONFIRM_DELETE, "Delete");
+        mkDrawButton(*yes, b.mouseX, b.mouseY, 9.5f, 0xc80f0fff);
+        MakerButton *no =
+            b.buttons.add(mkBox(viewW * 0.5f + 8, py + 14, 88, 22), BCMD_CONFIRM_CANCEL, "Cancel");
         mkDrawButton(*no, b.mouseX, b.mouseY, 9.5f);
+        Rect f = b.confirmFocus == 1 ? yes->r : no->r;
+        mkBrackets(Rect{f.l - 2, f.b - 2, f.r + 2, f.t + 2}, 5);
     }
     mkDrawToast();
 }
@@ -388,6 +514,14 @@ void brCommand(int id, int arg) {
         brSelect(b.page * MAKER_PAGE + b.selected % MAKER_PAGE);
         break;
     }
+    case BCMD_MUSIC:
+        musicEnabled = !musicEnabled;
+        if (musicEnabled)
+            playMusic(3080012186760326ULL);
+        else
+            stopMusic();
+        writeProgress();
+        break;
     }
 }
 
@@ -477,12 +611,7 @@ bool brKey(int key) {
         makerLeaveBrowser();
         break;
     case 'M':
-        musicEnabled = !musicEnabled;
-        if (musicEnabled)
-            playMusic(3080012186760326ULL);
-        else
-            stopMusic();
-        writeProgress();
+        brCommand(BCMD_MUSIC, 0);
         break;
     }
     return true;
@@ -495,6 +624,16 @@ void brTick(float dt) {
         makerBuildCatalog();
         makerBrowser.loading = false;
     }
+    // Read one missing course photo of the page per frame.
+    if (!makerBrowser.loading && makerCatalogReady)
+        for (int i = 0; i < MAKER_PAGE; i++) {
+            int slot = makerBrowser.page * MAKER_PAGE + i;
+            const MakerPhoto &p = makerPhotos[i];
+            if (makerBrowser.exists[slot] && (!p.ready || p.slot != slot)) {
+                brBuildPhoto(slot);
+                break;
+            }
+        }
 }
 
 void brOpen() {

@@ -1,0 +1,1788 @@
+diff --git a/src/maker.h b/src/maker.h
+index da9c919..0e43db8 100644
+--- a/src/maker.h
++++ b/src/maker.h
+@@ -498,10 +498,10 @@ void makerRenderPlayOverlay() {
+         return;
+     const char *text = makerPlayFromCursor ? "TEST FROM CURSOR   F5 / Tab: back to the editor"
+                                            : "TEST PLAY   F5 / Tab: back to the editor";
+-    float size = 8, w = mkTextWidth(text, size, true) + 14, h = 15;
++    float size = 8, w = mkTextWidth(text, size, true) + 16, h = 15;
+     float x = (viewW - w) * 0.5f, y = 4;
+-    mkRect(x, y, w, h, 0x00000080);
+-    mkText(x + 7, y + (h - mkLineHeight(size, true)) * 0.5f, text, size, 0xffffffd0, true);
++    mkHudPlate(mkBox(x, y, w, h));
++    mkText(x + 8, y + (h - mkLineHeight(size, true)) * 0.5f, text, size, 0xffffffff, true);
+ }
+ 
+ // Closing the window keeps unsaved editor work.
+diff --git a/src/maker_browser.h b/src/maker_browser.h
+index b46024d..d7dfe8d 100644
+--- a/src/maker_browser.h
++++ b/src/maker_browser.h
+@@ -1,7 +1,9 @@
+ #pragma once
+ 
+-// Course list of the maker chapter: pages of course cards with schematic thumbnails, award badges
+-// and verification state. Creating a course asks for a theme first, like choosing a course style.
++// Course list of the maker chapter, laid out like a world's level select: the MAKER logo over the
++// menu sky and pages of course cards framed in the colour of each course's theme, each with a
++// photo of its opening screen and the level-select award badges. A new course first picks its
++// theme from the world logos.
+ 
+ enum MakerBrowserCommand {
+     BCMD_NONE,
+@@ -17,13 +19,13 @@ enum MakerBrowserCommand {
+     BCMD_THEME,
+     BCMD_THEME_CANCEL,
+     BCMD_CONFIRM_DELETE,
+-    BCMD_CONFIRM_CANCEL
++    BCMD_CONFIRM_CANCEL,
++    BCMD_MUSIC
+ };
+ 
+ struct MakerBrowser {
+     MakerHeader heads[MAKER_SLOTS];
+-    bool exists[MAKER_SLOTS], thumbValid[MAKER_SLOTS];
+-    GLuint thumbs[MAKER_SLOTS];
++    bool exists[MAKER_SLOTS];
+     int selected, page;
+     int confirm, confirmFocus; // slot awaiting delete confirmation (-1 none); 1 focuses Delete
+     float age, mouseX, mouseY, lastClick, lastClickX, lastClickY;
+@@ -37,70 +39,112 @@ MakerLevel makerPlayCourse, makerCopyCourse;
+ void makerStartCourse(int slot);
+ void makerEditCourse(int slot, bool fresh, int theme);
+ void makerLeaveBrowser();
++void makerLoadChapterArtwork();
++extern Texture makerCardTitleTexture;
++
++// Course photos: the opening screen of each course on the page, drawn with its own bricks and
++// items. Only the pieces around the start are kept, and one course is read per frame.
++enum { BR_PHOTO_TILES = 640, BR_PHOTO_OBJECTS = 96 };
++
++const float BR_PHOTO_W = 432, BR_PHOTO_H = 144;
++
++struct MakerPhoto {
++    bool ready;
++    int slot, tileCount, objectCount;
++    Rect view;
++    MakerTile tiles[BR_PHOTO_TILES];
++    MakerObject objects[BR_PHOTO_OBJECTS];
++};
++
++MakerPhoto makerPhotos[MAKER_PAGE];
++MakerLevel makerPhotoCourse;
++
++// Sky behind each theme's photos, top then horizon.
++const u32 brPhotoSky[6][2] = {{0x57c4ffff, 0xc8ecffff}, {0x57c4ffff, 0xc8ecffff},
++                              {0x6a5acdff, 0xd8a8f0ff}, {0xff9a2eff, 0xffe7a0ff},
++                              {0xe0407aff, 0xffa040ff}, {0x1a1030ff, 0x4a2a60ff}};
+ 
+ void brRefresh() {
+-    for (int i = 0; i < MAKER_SLOTS; i++) {
++    for (int i = 0; i < MAKER_SLOTS; i++)
+         makerBrowser.exists[i] = makerLoadHeader(i, makerBrowser.heads[i]);
+-        makerBrowser.thumbValid[i] = false;
+-    }
++    for (int i = 0; i < MAKER_PAGE; i++)
++        makerPhotos[i].ready = false;
+ }
+ 
+-u32 brThumbColor(int code, int theme) {
+-    const u32 sky[6] = {0x5a8cc8ff, 0x5a8cc8ff, 0x7aa0d8ff, 0xe0a070ff, 0xd89060ff, 0x6a5aa0ff};
+-    switch (code) {
+-    case THUMB_SKY:
+-        return sky[(int)clamp((float)theme, 0, 5)];
+-    case THUMB_BACK:
+-        return 0x40506aff;
+-    case THUMB_SOLID:
+-        return 0x8a6a46ff;
+-    case THUMB_DECOR:
+-        return 0x6aa85aff;
+-    case THUMB_FRONT:
+-        return 0x3c6a40ff;
+-    case THUMB_HAZARD:
+-        return 0xe04848ff;
+-    case THUMB_ITEM:
+-        return 0x60e0ffff;
+-    case THUMB_GOAL:
+-        return 0xffd840ff;
+-    case THUMB_OBJECT:
+-        return 0xd8d8e0ff;
+-    case THUMB_START:
+-        return 0x80ff80ff;
++// Keep the bricks and items of a course's opening screen for its card.
++void brBuildPhoto(int slot) {
++    MakerPhoto &p = makerPhotos[slot % MAKER_PAGE];
++    p.ready = true;
++    p.slot = slot;
++    p.tileCount = p.objectCount = 0;
++    if (!makerLoadLevel(slot, makerPhotoCourse))
++        return;
++    const MakerLevel &l = makerPhotoCourse;
++    const MakerHeader &h = l.head;
++    float x = clamp(h.startX - 96, 0, maxf(0, h.width - BR_PHOTO_W));
++    float y = clamp(h.startY - 88, 0, maxf(0, h.height - BR_PHOTO_H));
++    p.view = mkBox(x, y, BR_PHOTO_W, BR_PHOTO_H);
++    for (int i = 0; i < l.tileCount && p.tileCount < BR_PHOTO_TILES; i++) {
++        const MakerTile &t = l.tiles[i];
++        if (t.r > p.view.l && t.l < p.view.r && t.t > p.view.b && t.b < p.view.t)
++            p.tiles[p.tileCount++] = t;
++    }
++    for (int i = 0; i < l.objectCount && p.objectCount < BR_PHOTO_OBJECTS; i++) {
++        const MakerObject &o = l.objects[i];
++        const MakerObjectDef *d = makerDefFor(o.klass);
++        Rect r = edObjectRect(o);
++        if (d && !(d->flags & (OBJ_FREE | OBJ_INVISIBLE | OBJ_START)) && r.r > p.view.l - 64 &&
++            r.l < p.view.r + 64 && r.t > p.view.b - 64 && r.b < p.view.t + 64)
++            p.objects[p.objectCount++] = o;
+     }
+-    return 0x141820ff;
+ }
+ 
+-GLuint brThumb(int slot) {
+-    if (makerBrowser.thumbValid[slot])
+-        return makerBrowser.thumbs[slot];
++// The photo covers the box from its bottom-left corner, so the ground and Bean stay in view.
++void brDrawPhoto(int slot, Rect box) {
+     const MakerHeader &h = makerBrowser.heads[slot];
+-    u8 pixels[MAKER_THUMB_W * MAKER_THUMB_H * 4];
+-    for (int i = 0; i < MAKER_THUMB_W * MAKER_THUMB_H; i++) {
+-        u32 c = brThumbColor(h.thumb[i], h.theme);
+-        pixels[i * 4] = (u8)(c >> 24);
+-        pixels[i * 4 + 1] = (u8)(c >> 16);
+-        pixels[i * 4 + 2] = (u8)(c >> 8);
+-        pixels[i * 4 + 3] = (u8)c;
++    const u32 *sky = brPhotoSky[(int)clamp((float)h.theme, 1, 5)];
++    mkGradient(box.l, box.b, box.r - box.l, box.t - box.b, sky[1], sky[0]);
++    const MakerPhoto &p = makerPhotos[slot % MAKER_PAGE];
++    if (!p.ready || p.slot != slot)
++        return;
++    float scale = maxf((box.r - box.l) / BR_PHOTO_W, (box.t - box.b) / BR_PHOTO_H);
++    glEnable(GL_SCISSOR_TEST);
++    glScissor(viewportX + makerRound(box.l * screenScale),
++              viewportY + makerRound(box.b * screenScale),
++              makerRound((box.r - box.l) * screenScale), makerRound((box.t - box.b) * screenScale));
++    glPushMatrix();
++    glTranslatef(box.l, box.b, 0);
++    glScalef(scale, scale, 1);
++    glTranslatef(-p.view.l, -p.view.b, 0);
++    for (int layer = 0; layer < MAKER_LAYERS; layer++) {
++        if (layer == MAKER_FRONT) {
++            for (int i = 0; i < p.objectCount; i++)
++                edDrawObject(p.objects[i], 0, 0, 1, -1, false);
++            edDrawStartBean(makerCentered(h.startX, h.startY, 32, 32));
++        }
++        // Main-layer blocks come before overlays such as grass, as in the editor.
++        for (int pass = 0; pass < 2; pass++)
++            for (int i = 0; i < p.tileCount; i++) {
++                const MakerTile &t = p.tiles[i];
++                bool opaque = (t.flags & TILE_OPAQUE) != 0;
++                if (t.layer == layer && (layer == MAKER_MAIN ? (pass == 0) == opaque : pass == 0))
++                    edDrawTile(t, 0, 0, 1);
++            }
+     }
+-    if (!makerBrowser.thumbs[slot])
+-        glGenTextures(1, &makerBrowser.thumbs[slot]);
+-    glBindTexture(GL_TEXTURE_2D, makerBrowser.thumbs[slot]);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, MAKER_THUMB_W, MAKER_THUMB_H, 0, GL_RGBA,
+-                 GL_UNSIGNED_BYTE, pixels);
+-    makerBrowser.thumbValid[slot] = true;
+-    return makerBrowser.thumbs[slot];
++    glPopMatrix();
++    glDisable(GL_SCISSOR_TEST);
+ }
+ 
+ int brCoinGoal(const MakerHeader &h) {
+     return h.coinGoal > 0 && h.coinGoal < h.coins ? h.coinGoal : h.coins;
+ }
+ 
++// Every award of the course: its gems, the gold shoe and its axolotl.
++bool brPerfect(const MakerHeader &h) {
++    return h.cleared && (h.coins <= 0 || h.bestCoins >= brCoinGoal(h)) &&
++           h.bestJumps <= h.jumpBest && (!h.hasAxolotl || h.axolotl);
++}
++
+ void brBadges(const MakerHeader &h, float x, float y, float size) {
+     Actor *gem = actor(16535973452759161611ULL), *shoe = actor(7897082502132702692ULL),
+           *axolotl = actor(12192429290865414990ULL);
+@@ -119,81 +163,138 @@ void brBadges(const MakerHeader &h, float x, float y, float size) {
+         drawActor(axolotl, mkBox(x, y, size, size), h.axolotl ? "on" : "off", 0);
+ }
+ 
+-void brCard(int slot, Rect r) {
+-    bool selected = slot == makerBrowser.selected;
+-    bool hover = mkInside(r, makerBrowser.mouseX, makerBrowser.mouseY);
+-    float w = r.r - r.l, h = r.t - r.b;
+-    u32 top = selected ? 0x3e5f8aff : hover ? 0x30496aff : 0x223349ff;
+-    mkGradient(r.l, r.b, w, h, 0x141f2cff, top);
+-    mkFrame(r.l, r.b, w, h, selected ? 0xffe070ff : 0x4a6584ff, selected ? 2 / screenScale : 0);
+-    char label[64];
+-    wsprintfA(label, "C-%02d", slot + 1);
+-    mkText(r.l + 5, r.t - 13, label, 8, 0x9fb4c8ff, true);
+-    if (!makerBrowser.exists[slot]) {
+-        mkTextCentered((r.l + r.r) * 0.5f, (r.b + r.t) * 0.5f, "+ New course", 9,
+-                       hover || selected ? 0xffffffff : 0x8fa3b8ff, true);
++// The chapter's MAKER logo, cut from the illustrated title layer of the world select card.
++void brDrawLogo(float cx, float cy, float height) {
++    makerLoadChapterArtwork();
++    const Texture &t = makerCardTitleTexture;
++    if (!t.gl)
+         return;
+-    }
+-    const MakerHeader &head = makerBrowser.heads[slot];
+-    mkFitText(label, sizeof(label), head.name, r.r - r.l - 39, 8.5f, true);
+-    mkText(r.l + 34, r.t - 13, label, 8.5f, 0xffffffff, true);
+-    float tw = w - 10, th = tw * MAKER_THUMB_H / MAKER_THUMB_W;
+-    if (th > h - 40) {
+-        th = h - 40;
+-        tw = th * MAKER_THUMB_W / MAKER_THUMB_H;
+-    }
+-    float tx = r.l + (w - tw) * 0.5f, ty = r.t - 17 - th;
++    // Bounds of the lettering on the 832x1024 canvas.
++    const float l = 54, top = 60, r = 757, bottom = 278;
++    float w = height * (r - l) / (bottom - top);
+     glEnable(GL_TEXTURE_2D);
+-    glBindTexture(GL_TEXTURE_2D, brThumb(slot));
++    glBindTexture(GL_TEXTURE_2D, t.gl);
++    // The painted logo is shown well below its source size, so filter it smoothly.
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+     glColor4f(1, 1, 1, 1);
+     glBegin(GL_QUADS);
+-    glTexCoord2f(0, 0);
+-    glVertex2f(tx, ty);
+-    glTexCoord2f(1, 0);
+-    glVertex2f(tx + tw, ty);
+-    glTexCoord2f(1, 1);
+-    glVertex2f(tx + tw, ty + th);
+-    glTexCoord2f(0, 1);
+-    glVertex2f(tx, ty + th);
++    glTexCoord2f(l / t.width, bottom / t.height);
++    glVertex2f(cx - w * 0.5f, cy - height * 0.5f);
++    glTexCoord2f(r / t.width, bottom / t.height);
++    glVertex2f(cx + w * 0.5f, cy - height * 0.5f);
++    glTexCoord2f(r / t.width, top / t.height);
++    glVertex2f(cx + w * 0.5f, cy + height * 0.5f);
++    glTexCoord2f(l / t.width, top / t.height);
++    glVertex2f(cx - w * 0.5f, cy + height * 0.5f);
+     glEnd();
+-    mkFrame(tx, ty, tw, th, 0x00000080);
+-    brBadges(head, r.l + 5, r.b + 4, 12);
+-    if (head.flags & MAKER_VERIFIED)
+-        mkText(r.r - mkTextWidth("Verified", 7.5f, true) - 5, r.b + 5, "Verified", 7.5f, 0x80ff80ff,
+-               true);
+-    else
+-        mkText(r.r - mkTextWidth("Not verified", 7.5f) - 5, r.b + 5, "Not verified", 7.5f,
+-               0x8090a0ff);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++}
++
++// Slot number in yellow on a black capsule, like the pause captions.
++Rect brNumber(int slot, float x, float y, float h, float alpha = 1) {
++    char text[8];
++    wsprintfA(text, "%02d", slot + 1);
++    Rect r = mkBox(x, y, mkTextWidth(text, 7.5f, true) + 9, h);
++    mkPill(r, alpha);
++    mkTextCentered((r.l + r.r) * 0.5f, (r.b + r.t) * 0.5f, text, 7.5f,
++                   0xffee3300 | (u32)(int)(255 * alpha), true);
++    return r;
++}
++
++void brCard(int slot, Rect r) {
++    MakerBrowser &b = makerBrowser;
++    bool selected = slot == b.selected;
++    bool hover = b.confirm < 0 && !b.themePicker && mkInside(r, b.mouseX, b.mouseY);
++    bool held = hover && mkKeyDown(VK_LBUTTON);
++    float w = r.r - r.l, h = r.t - r.b, pad = 5, rowH = 11;
++    Rect focus = {r.l - 2, r.b - 2, r.r + 2, r.t + 2};
++    if (!b.exists[slot]) {
++        // Free slots are the pressed level button, faded into the sky.
++        mkWorldFrame(r, 1, "down", hover ? 0.75f : 0.45f);
++        brNumber(slot, r.l + pad, r.t - pad - rowH, rowH, 0.8f);
++        float cx = (r.l + r.r) * 0.5f, cy = (r.b + r.t) * 0.5f;
++        mkLabelCentered(cx, cy + h * 0.08f, "+", minf(18, h * 0.25f), 0xffffffff);
++        mkLabelCentered(cx, cy - h * 0.16f, "New course", 8, hover ? 0xffffffff : 0xe8f0e0ff);
++        if (selected)
++            mkBrackets(focus, 6);
++        return;
++    }
++    const MakerHeader &head = b.heads[slot];
++    int theme = (int)clamp((float)head.theme, 1, 5);
++    // A course with every award gets the level select's turning star behind its corner.
++    if (brPerfect(head))
++        mkSprite(MKART_STAR, "", makerCentered(r.r - 3, r.t - 3, 30, 30), 1, 0, -135 * b.age);
++    mkWorldFrame(r, theme, held ? "down" : "up", 1, hover ? 0.16f : 0);
++    Rect number = brNumber(slot, r.l + pad, r.t - pad - rowH, rowH);
++    char name[64];
++    mkFitText(name, sizeof(name), head.name, r.r - pad - number.r - 4, 8.5f, true);
++    mkLabel(number.r + 4, (number.b + number.t - mkLineHeight(8.5f, true)) * 0.5f, name, 8.5f,
++            0xffffffff);
++    // The photo sits in the stage-clear score box; badges and the clear check run underneath.
++    float badge = clamp(h * 0.14f, 8, 11);
++    Rect frame = {r.l + pad - 1, r.b + pad + badge + 1, r.r - pad + 1, number.b - 2};
++    mkInset(frame);
++    brDrawPhoto(slot, Rect{frame.l + 2, frame.b + 2, frame.r - 2, frame.t - 2});
++    brBadges(head, r.l + pad, r.b + pad - 1, badge);
++    bool verified = (head.flags & MAKER_VERIFIED) != 0;
++    Rect tick = mkBox(r.r - pad - badge, r.b + pad - 1, badge, badge);
++    mkSprite(MKART_CHECK, verified ? "up-on" : "up-off", tick);
++    const char *state = verified ? "Verified" : "Not verified";
++    float tw = mkTextWidth(state, 7, true);
++    if (tw + badge * 5 + 16 < w)
++        mkLabel(tick.l - tw - 3, (tick.b + tick.t - mkLineHeight(7, true)) * 0.5f, state, 7,
++                verified ? 0xffffffff : 0xd8d8d8ff);
++    if (selected)
++        mkBrackets(focus, 6);
++}
++
++// A theme choice: the world's level button with its title logo.
++void brThemeChoice(MakerButton &btn) {
++    MakerBrowser &b = makerBrowser;
++    bool hover = mkInside(btn.r, b.mouseX, b.mouseY), held = hover && mkKeyDown(VK_LBUTTON);
++    float h = btn.r.t - btn.r.b;
++    mkWorldFrame(btn.r, btn.arg, held ? "down" : "up", 1, hover ? 0.16f : 0);
++    char key[4];
++    wsprintfA(key, "%d", btn.arg);
++    Rect pill = mkBox(btn.r.l + 6, (btn.r.b + btn.r.t) * 0.5f - 6, 14, 12);
++    mkPill(pill);
++    mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, key, 7.5f, 0xffee33ff, true);
++    mkSpriteFit(MKART_WORLD_TITLE[btn.arg], "",
++                Rect{pill.r + 6, btn.r.b + 3, btn.r.r - pill.r + btn.r.l - 6, btn.r.t - 3});
++    if (hover)
++        mkBrackets(Rect{btn.r.l - 2, btn.r.b - 2, btn.r.r + 2, btn.r.t + 2}, minf(6, h * 0.3f));
+ }
+ 
+ void brRender() {
+     MakerBrowser &b = makerBrowser;
+     b.buttons.clear();
+     b.rendered = true;
+-    mkGradient(0, 0, viewW, viewH, 0x0b1a2aff, 0x2b5a7aff);
+-    for (int i = 0; i < 9; i++) {
+-        float x = makerFloor(b.age * 12 + i * 120) % (int)(viewW + 240) - 120.0f;
+-        mkRect(x, viewH - 40 - (i % 3) * 30, 90, 10, 0xffffff10);
+-    }
++    mkSky(b.age);
+     if (b.loading || !makerCatalogReady) {
+-        mkTextCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff,
+-                       true);
++        mkLabelCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff);
+         return;
+     }
+-    float titleH = 30;
+-    mkTextShadow(12, viewH - 24, "COURSE MAKER", 14, 0xfff2b0ff, true);
++    // Header: back button, logo and page selector, as on a world's level select.
++    float margin = 10, headerH = clamp(viewH * 0.17f, 44, 66), cy = viewH - headerH * 0.5f;
++    MakerButton *back = b.buttons.add(mkBox(margin - 4, cy - 18, 36, 36), BCMD_BACK, 0);
++    mkDrawIcon(*back, MKART_BACK, b.mouseX, b.mouseY);
++    brDrawLogo(viewW * 0.5f, cy, headerH - 8);
+     char text[64];
+     int pages = MAKER_SLOTS / MAKER_PAGE;
+-    wsprintfA(text, "Page %d / %d", b.page + 1, pages);
+-    float pw = mkTextWidth(text, 9, true);
+-    MakerButton *prev =
+-        b.buttons.add(mkBox(viewW - pw - 70, viewH - 25, 22, 18), BCMD_PAGE, "<", -1);
+-    mkDrawButton(*prev, b.mouseX, b.mouseY, 9);
+-    mkText(viewW - pw - 44, viewH - 22, text, 9, 0xffffffff, true);
+-    MakerButton *next = b.buttons.add(mkBox(viewW - 38, viewH - 25, 22, 18), BCMD_PAGE, ">", 1);
+-    mkDrawButton(*next, b.mouseX, b.mouseY, 9);
+-    float barH = 30, margin = 10, gap = 6, infoH = 12;
+-    float gridTop = viewH - titleH - 4, gridBottom = barH + infoH + 6;
++    wsprintfA(text, "%d / %d", b.page + 1, pages);
++    float arrow = 24, pw = mkTextWidth(text, 9, true) + 16;
++    float x = viewW - margin - arrow * 2 - pw - 4;
++    MakerButton *prev = b.buttons.add(mkBox(x, cy - arrow * 0.5f, arrow, arrow), BCMD_PAGE, 0, -1);
++    mkDrawArrow(*prev, true, b.mouseX, b.mouseY);
++    Rect pill = mkBox(prev->r.r + 2, cy - 7, pw, 14);
++    mkPill(pill);
++    mkTextCentered((pill.l + pill.r) * 0.5f, cy, text, 9, 0xffffffff, true);
++    MakerButton *next =
++        b.buttons.add(mkBox(pill.r + 2, cy - arrow * 0.5f, arrow, arrow), BCMD_PAGE, 0, 1);
++    mkDrawArrow(*next, false, b.mouseX, b.mouseY);
++    // Course cards.
++    float barH = 26, infoH = 13, gap = 7;
++    float gridTop = viewH - headerH, gridBottom = barH + infoH + 9;
+     int columns = 4, rows = MAKER_PAGE / columns;
+     float cw = (viewW - margin * 2 - gap * (columns - 1)) / columns;
+     float ch = (gridTop - gridBottom - gap * (rows - 1)) / rows;
+@@ -217,26 +318,32 @@ void brRender() {
+                           {"Edit", "Edit (E)", BCMD_EDIT, !exists},
+                           {"New", "New (N)", BCMD_NEW, exists},
+                           {"Copy", "Copy (C)", BCMD_COPY, !exists},
+-                          {"Delete", "Delete (Del)", BCMD_DELETE, !exists},
+-                          {"Back", "Back (Esc)", BCMD_BACK, false}};
+-    float keyedW = margin * 2 + 20;
+-    for (int i = 0; i < 6; i++)
+-        keyedW += mkTextWidth(specs[i].keyed, 9, true) + 26;
++                          {"Delete", "Delete (Del)", BCMD_DELETE, !exists}};
++    const int specCount = (int)(sizeof(specs) / sizeof(specs[0]));
++    float size = 9, music = 24, keyedW = margin * 2 + music + 8;
++    for (int i = 0; i < specCount; i++)
++        keyedW += mkButtonWidth(specs[i].keyed, size) + 4;
+     bool keyed = keyedW < viewW;
+-    float x = margin;
+-    for (int i = 0; i < 6; i++) {
++    x = margin;
++    for (int i = 0; i < specCount; i++) {
+         const char *label = keyed ? specs[i].keyed : specs[i].label;
+-        float w = mkTextWidth(label, 9, true) + 22;
+-        if (i == 5)
+-            x = viewW - margin - w;
+-        MakerButton *btn = b.buttons.add(mkBox(x, 6, w, barH - 10), specs[i].id, label, 0, false,
++        float w = mkButtonWidth(label, size);
++        MakerButton *btn = b.buttons.add(mkBox(x, 6, w, barH - 6), specs[i].id, label, 0, false,
+                                          specs[i].disabled);
+-        mkDrawButton(*btn, b.mouseX, b.mouseY, 9);
++        mkDrawButton(*btn, b.mouseX, b.mouseY, size,
++                     specs[i].id == BCMD_DELETE ? 0xc80f0fff : 0x000000ff);
+         x += w + 4;
+     }
++    // The title screen's music toggle; M does the same.
++    MakerButton *tune =
++        b.buttons.add(mkBox(viewW - margin - music, 4, music, music), BCMD_MUSIC, 0);
++    bool tuneDown = mkInside(tune->r, b.mouseX, b.mouseY) && mkKeyDown(VK_LBUTTON);
++    mkSprite(MKART_MUSIC,
++             musicEnabled ? (tuneDown ? "down-on" : "up-on") : (tuneDown ? "down-off" : "up-off"),
++             tune->r);
++    char info[128], fitted[128];
+     if (exists) {
+         const MakerHeader &h = b.heads[b.selected];
+-        char info[128];
+         if (h.cleared)
+             wsprintfA(info, "%s   %d tiles long   Best %d jumps   Gems %d/%d",
+                       makerThemeNames[(int)clamp((float)h.theme, 1, 5)], h.width / 32, h.bestJumps,
+@@ -245,42 +352,50 @@ void brRender() {
+             wsprintfA(info, "%s   %d tiles long   Par %d   Gold shoe %d",
+                       makerThemeNames[(int)clamp((float)h.theme, 1, 5)], h.width / 32, h.jumpPar,
+                       h.jumpBest);
+-        char fitted[128];
+-        mkFitText(fitted, sizeof(fitted), info, viewW - margin * 2, 8, false);
+-        mkText(margin, barH - 2, fitted, 8, 0xc8d8e8ff);
+-    }
++    } else
++        wsprintfA(info, "C-%02d is free   New (N) or a double-click starts a course here",
++                  b.selected + 1);
++    mkFitText(fitted, sizeof(fitted), info, viewW - margin * 2 - 12, 8, false);
++    mkHudPlate(mkBox(margin, barH + 4, mkTextWidth(fitted, 8) + 12, infoH));
++    mkText(margin + 6, barH + 4 + (infoH - mkLineHeight(8)) * 0.5f, fitted, 8, 0xffffffff);
+     if (b.themePicker) {
+         b.buttons.add(mkBox(0, 0, viewW, viewH), BCMD_THEME_CANCEL, 0);
+-        mkRect(0, 0, viewW, viewH, 0x00000090);
+-        float w = minf(300, viewW - 20), h = 168, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
+-        mkPanel(px, py, w, h);
++        mkShade(0.85f);
++        float rowH = clamp((viewH - 100) / 5, 24, 34);
++        float w = minf(300, viewW - 20), h = rowH * 5 + 36, px = (viewW - w) * 0.5f,
++              py = (viewH - h) * 0.5f - 6;
++        mkGreenPanel(mkBox(px, py, w, h));
+         b.buttons.add(mkBox(px, py, w, h), BCMD_BACKDROP, 0);
+-        mkTextCentered(viewW * 0.5f, py + h - 16, "Choose a theme", 11, 0xfff2b0ff, true);
++        mkPanelTitle(viewW * 0.5f, py + h, "Choose a theme");
+         for (int t = 1; t <= 5; t++) {
+-            MakerButton *btn = b.buttons.add(mkBox(px + 20, py + h - 30 - t * 24, w - 40, 20),
+-                                             BCMD_THEME, makerThemeNames[t], t);
+-            mkDrawButton(*btn, b.mouseX, b.mouseY, 9.5f);
++            MakerButton *btn =
++                b.buttons.add(mkBox(px + 14, py + h - 18 - t * rowH, w - 28, rowH - 4), BCMD_THEME,
++                              makerThemeNames[t], t);
++            brThemeChoice(*btn);
+         }
+     }
+     if (b.confirm >= 0) {
+         // In-game confirmation; a system dialog could hide behind the fullscreen window.
+         b.buttons.add(mkBox(0, 0, viewW, viewH), BCMD_CONFIRM_CANCEL, 0);
+-        mkRect(0, 0, viewW, viewH, 0x00000090);
+-        float w = minf(320, viewW - 20), h = 92, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
+-        mkPanel(px, py, w, h);
++        mkShade(0.85f);
++        float w = minf(320, viewW - 20), h = 100, px = (viewW - w) * 0.5f, py = (viewH - h) * 0.5f;
++        mkGreenPanel(mkBox(px, py, w, h));
+         b.buttons.add(mkBox(px, py, w, h), BCMD_BACKDROP, 0);
++        mkPanelTitle(viewW * 0.5f, py + h, "Delete course?");
+         char name[64], question[96];
+-        mkFitText(name, sizeof(name), b.heads[b.confirm].name, w - 120, 10, true);
+-        wsprintfA(question, "Delete C-%02d \"%s\"?", b.confirm + 1, name);
+-        mkTextCentered(viewW * 0.5f, py + h - 20, question, 10, 0xfff2b0ff, true);
+-        mkTextCentered(viewW * 0.5f, py + h - 38, "The course and its records cannot be restored.",
+-                       8, 0xc8d8e8ff);
+-        MakerButton *yes = b.buttons.add(mkBox(viewW * 0.5f - 96, py + 10, 88, 20),
+-                                         BCMD_CONFIRM_DELETE, "Delete", 0, b.confirmFocus == 1);
+-        mkDrawButton(*yes, b.mouseX, b.mouseY, 9.5f);
+-        MakerButton *no = b.buttons.add(mkBox(viewW * 0.5f + 8, py + 10, 88, 20),
+-                                        BCMD_CONFIRM_CANCEL, "Cancel", 0, b.confirmFocus == 0);
++        mkFitText(name, sizeof(name), b.heads[b.confirm].name, w - 90, 10, true);
++        wsprintfA(question, "C-%02d \"%s\"", b.confirm + 1, name);
++        mkTextCentered(viewW * 0.5f, py + h - 30, question, 10, 0x000000ff, true);
++        mkTextCentered(viewW * 0.5f, py + h - 47, "The course and its records cannot be restored.",
++                       8, 0x1e3200ff);
++        MakerButton *yes =
++            b.buttons.add(mkBox(viewW * 0.5f - 96, py + 14, 88, 22), BCMD_CONFIRM_DELETE, "Delete");
++        mkDrawButton(*yes, b.mouseX, b.mouseY, 9.5f, 0xc80f0fff);
++        MakerButton *no =
++            b.buttons.add(mkBox(viewW * 0.5f + 8, py + 14, 88, 22), BCMD_CONFIRM_CANCEL, "Cancel");
+         mkDrawButton(*no, b.mouseX, b.mouseY, 9.5f);
++        Rect f = b.confirmFocus == 1 ? yes->r : no->r;
++        mkBrackets(Rect{f.l - 2, f.b - 2, f.r + 2, f.t + 2}, 5);
+     }
+     mkDrawToast();
+ }
+@@ -388,6 +503,14 @@ void brCommand(int id, int arg) {
+         brSelect(b.page * MAKER_PAGE + b.selected % MAKER_PAGE);
+         break;
+     }
++    case BCMD_MUSIC:
++        musicEnabled = !musicEnabled;
++        if (musicEnabled)
++            playMusic(3080012186760326ULL);
++        else
++            stopMusic();
++        writeProgress();
++        break;
+     }
+ }
+ 
+@@ -477,12 +600,7 @@ bool brKey(int key) {
+         makerLeaveBrowser();
+         break;
+     case 'M':
+-        musicEnabled = !musicEnabled;
+-        if (musicEnabled)
+-            playMusic(3080012186760326ULL);
+-        else
+-            stopMusic();
+-        writeProgress();
++        brCommand(BCMD_MUSIC, 0);
+         break;
+     }
+     return true;
+@@ -495,6 +613,16 @@ void brTick(float dt) {
+         makerBuildCatalog();
+         makerBrowser.loading = false;
+     }
++    // Read one missing course photo of the page per frame.
++    if (!makerBrowser.loading && makerCatalogReady)
++        for (int i = 0; i < MAKER_PAGE; i++) {
++            int slot = makerBrowser.page * MAKER_PAGE + i;
++            const MakerPhoto &p = makerPhotos[i];
++            if (makerBrowser.exists[slot] && (!p.ready || p.slot != slot)) {
++                brBuildPhoto(slot);
++                break;
++            }
++        }
+ }
+ 
+ void brOpen() {
+diff --git a/src/maker_editor.h b/src/maker_editor.h
+index c26fbea..51ed423 100644
+--- a/src/maker_editor.h
++++ b/src/maker_editor.h
+@@ -1802,7 +1802,9 @@ void edDrawWater(Rect r, float alpha, int index) {
+     }
+ }
+ 
+-void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int index = -1) {
++// Without `marks` only the object's artwork is drawn, as in the course list photos.
++void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int index = -1,
++                  bool marks = true) {
+     const MakerObjectDef *d = makerDefFor(o.klass);
+     if (!d)
+         return;
+@@ -1877,6 +1879,8 @@ void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int ind
+         edPendulumParts(m, *d, true, alpha);
+     if (klass == MAKER_CLASS_SWITCH)
+         edDrawSwitchInsert(r, makerEd.age, alpha);
++    if (!marks)
++        return;
+     // Editor-only colour tag of the switch group: switches, switch blocks, spikes that follow a
+     // group and enemies that flip one when defeated. In play every group looks alike.
+     int tag = makerParamIndex(*d, WRITE_DEFEAT), shift = 0;
+@@ -2354,70 +2358,106 @@ struct MakerToolSpec {
+     const char *label;
+     int id, arg;
+     bool on;
++    u64 icon; // a game icon button instead of a text button
++};
++
++// The toolbar's two groups and how they fit the window: smaller captions first, then tighter
++// buttons, then the right-hand group moves to a second row.
++struct MakerToolbar {
++    MakerToolSpec left[12], right[6];
++    char grid[16];
++    float size, pad;
++    int rows;
+ };
+ 
+-// Width of a row of labelled buttons; null labels are group gaps.
+-float edRowWidth(const MakerToolSpec *specs, int count, float size, float gap) {
++const float MAKER_TOOL_ROW = 24;
++
++// Width of a row of buttons; null labels are group gaps and icon buttons are square.
++float edRowWidth(const MakerToolSpec *specs, int count, float size, float pad, float icon) {
+     float w = 0;
+     for (int i = 0; i < count; i++)
+-        w += specs[i].label ? mkTextWidth(specs[i].label, size, specs[i].on) + 10 + gap : 5;
++        w += specs[i].icon    ? icon + 3 + 2
++             : specs[i].label ? mkButtonWidth(specs[i].label, size, pad) + 2
++                              : 5;
+     return w;
+ }
+ 
+-void edToolbar() {
++void edToolbarLayout(MakerToolbar &t) {
++    wsprintfA(t.grid, "Grid %d", makerEd.grid);
++    const MakerToolSpec left[12] = {{"Play", CMD_PLAY, 0, false, MKART_PLAY},
++                                    {"Pen", CMD_TOOL, TOOL_PEN, makerEd.tool == TOOL_PEN},
++                                    {"Erase", CMD_TOOL, TOOL_ERASE, makerEd.tool == TOOL_ERASE},
++                                    {"Select", CMD_TOOL, TOOL_SELECT, makerEd.tool == TOOL_SELECT},
++                                    {"Hand", CMD_TOOL, TOOL_HAND, makerEd.tool == TOOL_HAND},
++                                    {0, 0, 0, false},
++                                    {"Back", CMD_LAYER, MAKER_BACK, makerEd.layer == MAKER_BACK},
++                                    {"Main", CMD_LAYER, MAKER_MAIN, makerEd.layer == MAKER_MAIN},
++                                    {"Front", CMD_LAYER, MAKER_FRONT, makerEd.layer == MAKER_FRONT},
++                                    {0, 0, 0, false},
++                                    {"Undo", CMD_UNDO, 0, false},
++                                    {"Redo", CMD_REDO, 0, false}};
++    const MakerToolSpec right[6] = {{"Exit", CMD_EXIT, 0, false, MKART_EXIT},
++                                    {"Save", CMD_SAVE, 0, false},
++                                    {"Course", CMD_SETTINGS, 0, makerEd.settings, MKART_WRENCH},
++                                    {"?", CMD_HELP, 0, makerEd.help},
++                                    {"Hitbox", CMD_VIEW_COLLISION, 0, makerEd.showCollision},
++                                    {t.grid, CMD_GRID, 0, false}};
++    memcpy(t.left, left, sizeof(left));
++    memcpy(t.right, right, sizeof(right));
++    float icon = MAKER_TOOL_ROW - 6;
++    for (t.rows = 1; t.rows <= 2; t.rows++)
++        for (t.size = 8.5f, t.pad = 12;;) {
++            float l = edRowWidth(t.left, 12, t.size, t.pad, icon),
++                  r = edRowWidth(t.right, 6, t.size, t.pad, icon);
++            if ((t.rows == 1 ? l + r : maxf(l, r)) + 16 <= viewW)
++                return;
++            if (t.size > 6.5f)
++                t.size -= 0.5f;
++            else if (t.pad > 7)
++                t.pad -= 1;
++            else
++                break;
++        }
++    t.rows = 2;
++}
++
++// Icons are a little taller than text buttons, like the HUD's square buttons.
++MakerButton *edToolButton(const MakerToolSpec &s, float x, float y, float h, float size,
++                          float pad) {
+     MakerButtons &bt = makerEd.buttons;
+-    float h = makerEd.toolbarH, y = viewH - h, x = 4, size = 8.5f;
+-    mkGradient(0, y, viewW, h, 0x16212dff, 0x223244ff);
+-    mkRect(0, y, viewW, 1 / screenScale, 0x000000ff);
+-    typedef MakerToolSpec Spec;
+-    const Spec left[] = {{"> Play", CMD_PLAY, 0, false},
+-                         {"Pen", CMD_TOOL, TOOL_PEN, makerEd.tool == TOOL_PEN},
+-                         {"Erase", CMD_TOOL, TOOL_ERASE, makerEd.tool == TOOL_ERASE},
+-                         {"Select", CMD_TOOL, TOOL_SELECT, makerEd.tool == TOOL_SELECT},
+-                         {"Hand", CMD_TOOL, TOOL_HAND, makerEd.tool == TOOL_HAND},
+-                         {0, 0, 0, false},
+-                         {"Back", CMD_LAYER, MAKER_BACK, makerEd.layer == MAKER_BACK},
+-                         {"Main", CMD_LAYER, MAKER_MAIN, makerEd.layer == MAKER_MAIN},
+-                         {"Front", CMD_LAYER, MAKER_FRONT, makerEd.layer == MAKER_FRONT},
+-                         {0, 0, 0, false},
+-                         {"Undo", CMD_UNDO, 0, false},
+-                         {"Redo", CMD_REDO, 0, false}};
+-    char gridLabel[16];
+-    wsprintfA(gridLabel, "Grid %d", makerEd.grid);
+-    const Spec right[] = {{"Exit", CMD_EXIT, 0, false},
+-                          {"Save", CMD_SAVE, 0, false},
+-                          {"Course", CMD_SETTINGS, 0, makerEd.settings},
+-                          {"?", CMD_HELP, 0, makerEd.help},
+-                          {"Hitbox", CMD_VIEW_COLLISION, 0, makerEd.showCollision},
+-                          {gridLabel, CMD_GRID, 0, false}};
+-    const int leftCount = (int)(sizeof(left) / sizeof(left[0])),
+-              rightCount = (int)(sizeof(right) / sizeof(right[0]));
+-    // Narrow windows (1024x768 gives a 512-unit view) shrink the labels before dropping any.
+-    while (size > 6.5f &&
+-           edRowWidth(left, leftCount, size, 2) + edRowWidth(right, rightCount, size, 2) + 16 >
+-               viewW)
+-        size -= 0.5f;
+-    for (int i = 0; i < leftCount; i++) {
+-        if (!left[i].label) {
++    float w = s.icon ? h + 3 : mkButtonWidth(s.label, size, pad);
++    Rect r = s.icon ? mkBox(x, y - 1.5f, w, w) : mkBox(x, y, w, h);
++    MakerButton *b = bt.add(r, s.id, s.icon ? 0 : s.label, s.arg, s.on);
++    if (s.icon)
++        mkDrawIcon(*b, s.icon, makerEd.mouseX, makerEd.mouseY);
++    else
++        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
++    return b;
++}
++
++void edToolbar(const MakerToolbar &t) {
++    float y = viewH - makerEd.toolbarH, bh = MAKER_TOOL_ROW - 6,
++          row = viewH - MAKER_TOOL_ROW + 3.5f;
++    // The pause menu frame runs off the top of the screen; its green rim edges the bar.
++    mkDarkPanel(Rect{-8, y - 2, viewW + 8, viewH + 8}, 0.75f);
++    float x = 4;
++    for (int i = 0; i < 12; i++) {
++        if (!t.left[i].label) {
+             x += 5;
+             continue;
+         }
+-        float w = mkTextWidth(left[i].label, size, left[i].on) + 10;
+-        MakerButton *b =
+-            bt.add(mkBox(x, y + 2, w, h - 4), left[i].id, left[i].label, left[i].arg, left[i].on);
+-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+-        x += w + 2;
++        x = edToolButton(t.left[i], x, row, bh, t.size, t.pad)->r.r + 2;
++    }
++    if (t.rows > 1) {
++        row -= MAKER_TOOL_ROW;
++        x = 4;
+     }
+     float rx = viewW - 4;
+-    for (int i = 0; i < rightCount; i++) {
+-        float w = mkTextWidth(right[i].label, size, right[i].on) + 10;
+-        rx -= w;
+-        if (rx < x + 40)
++    for (int i = 0; i < 6; i++) {
++        float w = t.right[i].icon ? bh + 3 : mkButtonWidth(t.right[i].label, t.size, t.pad);
++        if (rx - w < x + 4)
+             break;
+-        MakerButton *b = bt.add(mkBox(rx, y + 2, w, h - 4), right[i].id, right[i].label,
+-                                right[i].arg, right[i].on);
+-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+-        rx -= 2;
++        rx = edToolButton(t.right[i], rx - w, row, bh, t.size, t.pad)->r.l - 2;
+     }
+     // Course name between the two groups when there is room.
+     char title[64];
+@@ -2425,28 +2465,80 @@ void edToolbar() {
+               makerEd.dirty ? " *" : "");
+     float tw = mkTextWidth(title, 9, true);
+     if (rx - x > tw + 12)
+-        mkText((x + rx - tw) * 0.5f, y + (h - mkLineHeight(9, true)) * 0.5f, title, 9, 0xfff2b0ff,
+-               true);
++        mkText((x + rx - tw) * 0.5f, row + (bh - mkLineHeight(9, true)) * 0.5f, title, 9,
++               0xffee33ff, true);
++}
++
++// World filter in the world's level-button colour, numbered like the worlds.
++void edWorldButton(const MakerButton &b, float size) {
++    bool hover = mkInside(b.r, makerEd.mouseX, makerEd.mouseY);
++    mkWorldFrame(b.r, b.arg, b.on ? "down" : "up", 1, hover ? 0.18f : 0);
++    char digit[4];
++    wsprintfA(digit, "%d", b.arg);
++    const char *text = b.label ? b.label : digit;
++    mkLabelCentered((b.r.l + b.r.r) * 0.5f, (b.r.b + b.r.t) * 0.5f, text, size, 0xffffffff);
++    if (b.on)
++        mkBrackets(Rect{b.r.l - 1, b.r.b - 1, b.r.r + 1, b.r.t + 1}, 4);
++}
++
++// Palette and picker slots are the stage-clear score box; the brush in use gets the focus brackets.
++void edSlot(Rect r, const MakerPaletteItem &item, bool current, bool hover) {
++    mkInset(r);
++    if (hover)
++        mkGlow(MKART_BLACK_BOX, "", r, 7, 7, mkPixelScale(0.5f), 0.14f);
++    Rect inner = {r.l + 3, r.b + 3, r.r - 3, r.t - 3};
++    if (item.kind == 0)
++        edDrawPieceIcon(makerPieces[item.index], inner);
++    else if (item.kind == 1)
++        edDrawDefIcon(item.index, inner, makerEd.age);
++    else
++        edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
++    if (current)
++        mkBrackets(Rect{r.l - 1, r.b - 1, r.r + 1, r.t + 1}, 5);
++}
++
++bool edCurrentItem(const MakerPaletteItem &item) {
++    if (item.kind == 0)
++        return !makerEd.brush.object && makerEd.brush.piece == item.index;
++    return item.kind == 1 && makerEd.brush.object && makerEd.brush.def == item.index;
++}
++
++// Caption on a black plate, kept inside the screen.
++void edCaption(float cx, float y, const char *text, float size) {
++    float w = mkTextWidth(text, size) + 14, h = mkLineHeight(size) + 5;
++    float x = clamp(cx - w * 0.5f, 2, viewW - w - 2);
++    mkPlate(mkBox(x, y, w, h), 0.92f);
++    mkText(x + 7, y + (h - mkLineHeight(size)) * 0.5f, text, size, 0xffffffff);
+ }
+ 
+ void edPaletteBar() {
+     MakerButtons &bt = makerEd.buttons;
+     float h = makerEd.paletteH, tabH = 15, size = 8;
+-    mkGradient(0, 0, viewW, h, 0x121b26ff, 0x1d2b3bff);
+-    mkRect(0, h - 1 / screenScale, viewW, 1 / screenScale, 0x000000ff);
+-    float tabsWidth = 0;
+-    for (int t = 0; t < TAB_COUNT; t++)
+-        tabsWidth += mkTextWidth(makerTabNames[t], size, true) + 9;
++    // The pause menu frame runs off the bottom of the screen; its rim edges the palette.
++    mkDarkPanel(Rect{-8, -8, viewW + 8, h + 2}, 0.75f);
++    // Narrow windows shrink the captions, then the buttons, then leave the world filter to the
++    // picker.
+     bool worlds = edPieceTab(makerEd.tab);
+-    while (size > 6.5f && tabsWidth + (worlds ? 150 : 0) > viewW) {
+-        size -= 0.5f;
+-        tabsWidth = 0;
++    float pad = 12;
++    for (;;) {
++        float tabsWidth = 4;
+         for (int t = 0; t < TAB_COUNT; t++)
+-            tabsWidth += mkTextWidth(makerTabNames[t], size, true) + 9;
++            tabsWidth += mkButtonWidth(makerTabNames[t], size, pad) + 1;
++        float worldsW = worlds ? mkButtonWidth("All", size, pad) + 5 * (tabH + 1) + 6 : 0;
++        if (tabsWidth + worldsW + 6 <= viewW)
++            break;
++        if (size > 6.5f)
++            size -= 0.5f;
++        else if (pad > 7)
++            pad -= 1;
++        else if (worlds)
++            worlds = false;
++        else
++            break;
+     }
+-    float x = 3, ty = h - tabH - 1;
++    float x = 3, ty = h - tabH - 2;
+     for (int t = 0; t < TAB_COUNT; t++) {
+-        float w = mkTextWidth(makerTabNames[t], size, makerEd.tab == t) + 8;
++        float w = mkButtonWidth(makerTabNames[t], size, pad);
+         if (t == TAB_ITEMS)
+             x += 4;
+         MakerButton *b =
+@@ -2454,68 +2546,54 @@ void edPaletteBar() {
+         mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+         x += w + 1;
+     }
+-    if (edPieceTab(makerEd.tab)) {
+-        const char *worlds[6] = {"All", "W1", "W2", "W3", "W4", "W5"};
++    if (worlds) {
+         float wx = viewW - 3;
+         for (int i = 5; i >= 0; i--) {
+-            float w = mkTextWidth(worlds[i], size) + 8;
++            float w = i ? tabH : mkButtonWidth("All", size, pad);
+             wx -= w;
+             if (wx < x + 4)
+                 break;
+             MakerButton *b =
+-                bt.add(mkBox(wx, ty, w, tabH), CMD_WORLD, worlds[i], i, makerEd.world == i);
+-            mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
++                bt.add(mkBox(wx, ty, w, tabH), CMD_WORLD, i ? 0 : "All", i, makerEd.world == i);
++            if (i)
++                edWorldButton(*b, size);
++            else
++                mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+             wx -= 1;
+         }
+     }
+     edBuildPalette();
+-    float cell = h - tabH - 6, sx = 16, y0 = 2;
+-    int visible = (int)((viewW - sx * 2 - 4 - 52) / (cell + 2));
++    float cell = h - tabH - 8, arrow = 16, y0 = 3, sx = 3 + arrow + 3;
++    int visible = (int)((viewW - sx - arrow - 6 - cell - 6) / (cell + 2));
+     if (visible < 1)
+         visible = 1;
+     int maxScroll = makerEd.paletteCount - visible;
+     makerEd.scroll = (int)clamp((float)makerEd.scroll, 0, (float)(maxScroll > 0 ? maxScroll : 0));
+     MakerButton *lb =
+-        bt.add(mkBox(2, y0, sx - 2, cell), CMD_SCROLL, "<", -visible, false, makerEd.scroll <= 0);
+-    mkDrawButton(*lb, makerEd.mouseX, makerEd.mouseY, size);
++        bt.add(mkBox(3, y0, arrow, cell), CMD_SCROLL, 0, -visible, false, makerEd.scroll <= 0);
++    mkDrawArrow(*lb, true, makerEd.mouseX, makerEd.mouseY);
+     int hovered = -1;
+     for (int i = 0; i < visible && makerEd.scroll + i < makerEd.paletteCount; i++) {
+         int index = makerEd.scroll + i;
+-        Rect r = mkBox(sx + 2 + i * (cell + 2), y0, cell, cell);
+-        MakerPaletteItem item = makerEd.palette[index];
+-        bool current = false;
+-        if (item.kind == 0)
+-            current = !makerEd.brush.object && makerEd.brush.piece == item.index;
+-        else if (item.kind == 1)
+-            current = makerEd.brush.object && makerEd.brush.def == item.index;
++        Rect r = mkBox(sx + i * (cell + 2), y0, cell, cell);
+         bool hover = mkInside(r, makerEd.mouseX, makerEd.mouseY);
+         if (hover)
+             hovered = index;
+-        mkRect(r.l, r.b, r.r - r.l, r.t - r.b,
+-               current ? 0x6a5a20ff
+-               : hover ? 0x34506eff
+-                       : 0x0d141cff);
+-        mkFrame(r.l, r.b, r.r - r.l, r.t - r.b, current ? 0xffe070ff : 0x3a4d63ff);
+-        Rect inner = {r.l + 2, r.b + 2, r.r - 2, r.t - 2};
+-        if (item.kind == 0)
+-            edDrawPieceIcon(makerPieces[item.index], inner);
+-        else if (item.kind == 1)
+-            edDrawDefIcon(item.index, inner, makerEd.age);
+-        else
+-            edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
++        edSlot(r, makerEd.palette[index], edCurrentItem(makerEd.palette[index]), hover);
+         bt.add(r, CMD_ITEM, 0, index);
+     }
+     if (!makerEd.paletteCount)
+         mkText(sx + 6, y0 + cell * 0.5f - 4,
+                makerEd.tab == TAB_RECENT ? "Pick items from the other tabs" : "Nothing here yet", 8,
+-               0x8fa3b8ff);
+-    float rx = sx + 2 + visible * (cell + 2);
+-    MakerButton *rb = bt.add(mkBox(rx, y0, sx - 2, cell), CMD_SCROLL, ">", visible, false,
++               0xb8c4d0ff);
++    float rx = sx + visible * (cell + 2) + 1;
++    MakerButton *rb = bt.add(mkBox(rx, y0, arrow, cell), CMD_SCROLL, 0, visible, false,
+                              makerEd.scroll >= maxScroll);
+-    mkDrawButton(*rb, makerEd.mouseX, makerEd.mouseY, size);
++    mkDrawArrow(*rb, false, makerEd.mouseX, makerEd.mouseY);
++    // Every brick and item: the pause menu's level select button.
+     MakerButton *all =
+-        bt.add(mkBox(viewW - 50, y0, 47, cell), CMD_PICKER, "All...", 0, makerEd.picker);
+-    mkDrawButton(*all, makerEd.mouseX, makerEd.mouseY, size);
++        bt.add(mkBox(viewW - 4 - cell, y0, cell, cell), CMD_PICKER, 0, 0, makerEd.picker);
++    mkDrawIcon(*all, MKART_GRID, makerEd.mouseX, makerEd.mouseY);
+     if (hovered >= 0) {
+         char label[96];
+         MakerPaletteItem item = makerEd.palette[hovered];
+@@ -2532,17 +2610,15 @@ void edPaletteBar() {
+                       makerObjectDefs[item.index].hint);
+         else
+             lstrcpyA(label, "Recent brush");
+-        float w = mkTextWidth(label, 8) + 10;
+-        float lx = clamp(makerEd.mouseX - w * 0.5f, 2, viewW - w - 2);
+-        mkRect(lx, h + 3, w, 14, 0x000000d0);
+-        mkText(lx + 5, h + 4, label, 8, 0xffffffff);
++        edCaption(makerEd.mouseX, h + 4, label, 8);
+     }
+ }
+ 
+-// Status strip on the canvas: cursor, brush part and collision, course budget and warnings.
++// Status strip on the canvas: cursor, brush part and collision, course budget and warnings, on
++// the HUD's translucent plates.
+ void edStatus() {
+     MakerButtons &bt = makerEd.buttons;
+-    float y = edCanvasTop() - 13, size = 8;
++    float y = edCanvasTop() - 14, size = 8;
+     // Brush buttons sit on the right; the status text shortens when they would overlap it.
+     bool brush = makerEd.tool == TOOL_PEN && !makerEd.brush.object;
+     const char *labels[4] = {"Flip V", "Flip H", "Rotate", 0};
+@@ -2553,10 +2629,17 @@ void edStatus() {
+     wsprintfA(coll, "Hitbox: %s%s", edCollideName(edBrushCollide(makerEd.layer)),
+               makerEd.brush.collideMode < 0 ? " (auto)" : "");
+     float right = viewW - 4 - (makerEd.propObject >= 0 ? makerEd.propsW : 0), buttonsW = 0;
+-    if (brush) {
++    float buttonSize = size, pad = 12;
++    while (brush) {
++        buttonsW = mkButtonWidth(coll, buttonSize, pad);
+         for (int i = 0; i < 4; i++)
+-            buttonsW += mkTextWidth(labels[i], size) + 10;
+-        buttonsW += mkTextWidth(coll, size) + 8;
++            buttonsW += mkButtonWidth(labels[i], buttonSize, pad) + 2;
++        if (buttonsW <= right - 4 || pad <= 7)
++            break;
++        if (buttonSize > 6.5f)
++            buttonSize -= 0.5f;
++        else
++            pad -= 1;
+     }
+     char text[160];
+     float wx = edWorldX(makerEd.mouseX), wy = edWorldY(makerEd.mouseY);
+@@ -2565,11 +2648,15 @@ void edStatus() {
+               makerRound(makerEd.zoom * 100), makerFloor(wx / 32), makerFloor(wy / 32),
+               layers[makerEd.layer], makerEd.level.tileCount, makerEd.entityCost,
+               MAX_ENTITIES - 160);
+-    if (mkTextWidth(text, size) + 16 > right - buttonsW)
++    if (mkTextWidth(text, size) + 20 > right - buttonsW)
+         wsprintfA(text, "%d%%  x %d y %d  %s", makerRound(makerEd.zoom * 100), makerFloor(wx / 32),
+                   makerFloor(wy / 32), layers[makerEd.layer]);
+-    mkRect(0, y - 1, mkTextWidth(text, size) + 10, 13, 0x00000090);
+-    mkText(5, y, text, size, 0xd8e4f0ff);
++    // Without room beside the brush buttons the status line drops below them.
++    float by = y, tw = mkTextWidth(text, size) + 12;
++    if (tw + 8 > right - buttonsW)
++        y -= 16;
++    mkHudPlate(mkBox(2, y - 1, tw, 13));
++    mkText(8, y, text, size, 0xffffffff);
+     // Problems that would stop a clear check, listed under the status line.
+     const MakerLevel &level = makerEd.level;
+     int goals = 0;
+@@ -2584,26 +2671,42 @@ void edStatus() {
+     if (makerEd.entityCost > MAX_ENTITIES - 160)
+         warnings[warningCount++] = "Too many objects - the last ones will not appear";
+     for (int i = 0; i < warningCount; i++) {
+-        float wy = y - 14 * (i + 1);
+-        mkRect(0, wy - 1, mkTextWidth(warnings[i], size, true) + 10, 13, 0x500000c0);
+-        mkText(5, wy, warnings[i], size, 0xff9080ff, true);
++        float wy = y - 15 * (i + 1);
++        mkHudPlate(mkBox(2, wy - 1, mkTextWidth(warnings[i], size, true) + 12, 13));
++        mkText(8, wy, warnings[i], size, 0xff7060ff, true);
+     }
+     if (!brush)
+         return;
+     float x = right;
+     for (int i = 0; i < 4; i++) {
+-        float w = mkTextWidth(labels[i], size) + 8;
++        float w = mkButtonWidth(labels[i], buttonSize, pad);
+         x -= w;
+-        MakerButton *b = bt.add(mkBox(x, y - 1, w, 13), ids[i], labels[i], 0,
++        MakerButton *b = bt.add(mkBox(x, by - 2, w, 14), ids[i], labels[i], 0,
+                                 ids[i] == CMD_BRUSH_TRIM && makerEd.brush.trim > 0,
+                                 ids[i] == CMD_BRUSH_TRIM && !edBrushTrimmable(makerEd.brush));
+-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
++        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, buttonSize);
+         x -= 2;
+     }
+-    float w = mkTextWidth(coll, size) + 8;
++    float w = mkButtonWidth(coll, buttonSize, pad);
+     x -= w;
+-    MakerButton *b = bt.add(mkBox(x, y - 1, w, 13), CMD_BRUSH_COLLIDE, coll);
+-    mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
++    MakerButton *b = bt.add(mkBox(x, by - 2, w, 14), CMD_BRUSH_COLLIDE, coll);
++    mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, buttonSize);
++}
++
++// A value between the game's round arrows, on a black capsule like the pause captions.
++void edStepper(float l, float r, float y, float h, int decId, int decArg, int incId, int incArg,
++               const char *value, u32 color) {
++    MakerButtons &bt = makerEd.buttons;
++    MakerButton *dec = bt.add(mkBox(l, y, h, h), decId, 0, decArg);
++    mkDrawArrow(*dec, true, makerEd.mouseX, makerEd.mouseY);
++    MakerButton *inc = bt.add(mkBox(r - h, y, h, h), incId, 0, incArg);
++    mkDrawArrow(*inc, false, makerEd.mouseX, makerEd.mouseY);
++    Rect pill = {l + h + 2, y + 1, r - h - 2, y + h - 1};
++    mkPill(pill);
++    char shown[48];
++    float size = clamp(h * 0.6f, 6.5f, 8);
++    mkFitText(shown, sizeof(shown), value, pill.r - pill.l - 8, size, true);
++    mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, shown, size, color, true);
+ }
+ 
+ void edPropertyPanel() {
+@@ -2622,51 +2725,53 @@ void edPropertyPanel() {
+         return;
+     }
+     float w = makerEd.propsW, x = viewW - w, top = edCanvasTop() - 2, bottom = edCanvasBottom() + 2;
+-    mkPanel(x, bottom, w - 2, top - bottom);
++    mkDarkPanel(mkBox(x, bottom, w - 2, top - bottom), 0.75f);
+     bt.add(mkBox(x, bottom, w - 2, top - bottom), CMD_BACKDROP, 0, 1);
+-    float y = top - 16, size = 8.5f;
+-    mkText(x + 6, y, d->name, 10, 0xfff2b0ff, true);
+-    MakerButton *close = bt.add(mkBox(x + w - 20, y - 1, 15, 14), CMD_PROP_CLOSE, "x");
+-    mkDrawButton(*close, makerEd.mouseX, makerEd.mouseY, size);
++    float y = top - 20, size = 8.5f;
++    char title[64];
++    mkFitText(title, sizeof(title), d->name, w - 36, 10, true);
++    mkText(x + 8, y, title, 10, 0xffee33ff, true);
++    MakerButton *close = bt.add(mkBox(x + w - 24, y - 3, 18, 18), CMD_PROP_CLOSE, 0);
++    mkDrawIcon(*close, MKART_CLOSE, makerEd.mouseX, makerEd.mouseY);
+     y -= 12;
+-    int hintLines = mkTextWrapped(x + 6, y, d->hint, 7.5f, 0x9fb4c8ff, w - 14, 10, 2);
++    int hintLines = mkTextWrapped(x + 8, y, d->hint, 7.5f, 0xb8c4d0ff, w - 18, 10, 2);
+     y -= 8 + hintLines * 10;
+-    // One row per value: label on the left, "< value >" on the right; the wheel works over the row.
+-    // Only settings the object's class supports are listed, and rows tighten to fit them all.
+-    float minusX = x + w - 114, plusX = x + w - 24, valueX = (minusX + 16 + plusX) * 0.5f,
+-          labelW = w - 120;
++    // One row per value: label on the left, the value between arrows on the right; the wheel
++    // works over the row. Only settings the object's class supports are listed, and rows
++    // tighten to fit them all.
++    float stepL = x + w - clamp(w * 0.55f, 80, 118), stepR = x + w - 8, arrow = 14,
++          labelW = stepL - x - 12;
+     int rows = (d->flags & OBJ_RESIZE_X ? 1 : 0) + (d->flags & OBJ_RESIZE_Y ? 1 : 0) +
+                (d->flags & OBJ_ROTATE ? 1 : 0);
+     for (int i = 0; i < d->paramCount; i++)
+         rows += makerParamUsable(*d, i);
+-    float rowH = rows ? clamp((y - (bottom + 26)) / rows, 13, 17) : 17;
+-    char value[48], shown[48], label[40];
++    float rowH = rows ? clamp((y - (bottom + 28)) / rows, 14, 18) : 18;
++    char value[48], label[40];
+     if (d->flags & (OBJ_RESIZE_X | OBJ_RESIZE_Y)) {
+         float cw = d->cellW > 0 ? d->cellW : 16, ch = d->cellH > 0 ? d->cellH : 16;
+         for (int axis = 0; axis < 2; axis++) {
+             if (!(d->flags & (axis ? OBJ_RESIZE_Y : OBJ_RESIZE_X)))
+                 continue;
+-            bt.add(mkBox(x + 2, y - 3, w - 6, rowH), CMD_WHEEL, 0, 2000 + axis);
+-            mkText(x + 6, y, axis ? "Height" : "Width", size, 0xd8e4f0ff);
++            bt.add(mkBox(x + 4, y - 3, w - 10, rowH), CMD_WHEEL, 0, 2000 + axis);
++            mkText(x + 8, y, axis ? "Height" : "Width", size, 0xffffffff);
+             wsprintfA(value, "%d", makerRound((axis ? o.h : o.w) / (axis ? ch : cw)));
+-            MakerButton *minus = bt.add(mkBox(minusX, y - 2, 16, 14), CMD_PROP_SIZE, "-", axis * 2);
+-            mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
+-            mkTextCentered(valueX, y + 5, value, 8, 0xffffffff, true);
+-            MakerButton *plus =
+-                bt.add(mkBox(plusX, y - 2, 16, 14), CMD_PROP_SIZE, "+", axis * 2 + 1);
+-            mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
++            edStepper(stepL, stepR, y - 3, arrow, CMD_PROP_SIZE, axis * 2, CMD_PROP_SIZE,
++                      axis * 2 + 1, value, 0xffffffff);
+             y -= rowH;
+         }
+     }
+     if (d->flags & OBJ_ROTATE) {
+-        mkText(x + 6, y, "Rotation", size, 0xd8e4f0ff);
++        mkText(x + 8, y, "Rotation", size, 0xffffffff);
+         wsprintfA(value, "%d deg", makerRound(o.angle));
+-        mkTextCentered(valueX, y + 5, value, 8, 0xffffffff, true);
+-        MakerButton *rotate = bt.add(mkBox(plusX - 12, y - 2, 28, 14), CMD_PROP_ROTATE, "Turn");
++        Rect pill = {stepL + arrow + 2, y - 2, stepR - 36, y + arrow - 4};
++        mkPill(pill);
++        mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, value, 8, 0xffffffff,
++                       true);
++        MakerButton *rotate = bt.add(mkBox(stepR - 32, y - 3, 32, arrow), CMD_PROP_ROTATE, "Turn");
+         mkDrawButton(*rotate, makerEd.mouseX, makerEd.mouseY, 7.5f);
+         y -= rowH;
+     }
+-    for (int i = 0; i < d->paramCount && y > bottom + 24; i++) {
++    for (int i = 0; i < d->paramCount && y > bottom + 26; i++) {
+         if (!makerParamUsable(*d, i))
+             continue;
+         const MakerParamDef &p = d->params[i];
+@@ -2682,34 +2787,29 @@ void edPropertyPanel() {
+             }
+         } else if (!makerChoiceLabel(p.choices, makerRound(v), value, sizeof(value)))
+             mkFormat(value, v, 0);
+-        bt.add(mkBox(x + 2, y - 3, w - 6, rowH), CMD_WHEEL, 0, 1000 + i);
++        bt.add(mkBox(x + 4, y - 3, w - 10, rowH), CMD_WHEEL, 0, 1000 + i);
+         mkFitText(label, sizeof(label), p.label, labelW, size, false);
+-        mkText(x + 6, y, label, size, (o.setMask & (1u << i)) ? 0xffffffff : 0xb8c8d8ff);
+-        MakerButton *minus = bt.add(mkBox(minusX, y - 2, 16, 14), CMD_PROP_DEC, "<", i);
+-        mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
+-        mkFitText(shown, sizeof(shown), value, plusX - minusX - 20, 8, true);
+-        mkTextCentered(valueX, y + 5, shown, 8, 0xfff2b0ff, true);
+-        MakerButton *plus = bt.add(mkBox(plusX, y - 2, 16, 14), CMD_PROP_INC, ">", i);
+-        mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
++        // Values still at their default are dimmed.
++        mkText(x + 8, y, label, size, (o.setMask & (1u << i)) ? 0xffffffff : 0xa8b4c0ff);
++        edStepper(stepL, stepR, y - 3, arrow, CMD_PROP_DEC, i, CMD_PROP_INC, i, value, 0xffee33ff);
+         y -= rowH;
+     }
+-    MakerButton *del = bt.add(mkBox(x + 6, bottom + 6, w - 16, 16), CMD_PROP_DELETE, "Delete");
+-    mkDrawButton(*del, makerEd.mouseX, makerEd.mouseY, size);
++    MakerButton *del = bt.add(mkBox(x + 8, bottom + 7, w - 20, 17), CMD_PROP_DELETE, "Delete");
++    mkDrawButton(*del, makerEd.mouseX, makerEd.mouseY, size, 0xc80f0fff);
+ }
+ 
+ void edSettingsPanel() {
+     MakerButtons &bt = makerEd.buttons;
+     MakerHeader &h = makerEd.level.head;
+     bt.add(mkBox(0, 0, viewW, viewH), CMD_BACKDROP, 0, 0);
+-    mkRect(0, 0, viewW, viewH, 0x00000080);
++    mkShade(0.8f);
+     const int rowCount = 16;
+-    float w = minf(360, viewW - 20), rowH = minf(19, (viewH - 70) / (rowCount + 1));
+-    float ph = rowH * (rowCount + 1) + 30, x = (viewW - w) * 0.5f, y = (viewH - ph) * 0.5f;
+-    mkPanel(x, y, w, ph);
++    float w = minf(360, viewW - 20), rowH = minf(18, (viewH - 76) / (rowCount + 1));
++    float ph = rowH * (rowCount + 1) + 34, x = (viewW - w) * 0.5f, y = (viewH - ph) * 0.5f - 4;
++    mkGreenPanel(mkBox(x, y, w, ph));
+     bt.add(mkBox(x, y, w, ph), CMD_BACKDROP, 0, 1);
+-    float size = 9, row = y + ph - 22;
+-    mkTextCentered(x + w * 0.5f, row + 8, "Course Settings", 11, 0xfff2b0ff, true);
+-    row -= rowH + 2;
++    float size = clamp(rowH * 0.6f, 6.5f, 9), row = y + ph - 28;
++    mkPanelTitle(x + w * 0.5f, y + ph, "Course Settings");
+     char value[80];
+ 
+     struct Row {
+@@ -2734,8 +2834,9 @@ void edSettingsPanel() {
+                         {"Camera ahead", CMD_SET_AHEAD_X},
+                         {"Camera up", CMD_SET_AHEAD_Y}};
+     for (int i = 0; i < rowCount; i++) {
+-        mkText(x + 10, row + 3, rows[i].label, size, 0xd8e4f0ff);
+-        float vx = x + 100, vw = w - 110;
++        float bh = rowH - 3, vx = x + 108, vw = w - 122;
++        mkText(x + 14, row + (bh - mkLineHeight(size, true)) * 0.5f, rows[i].label, size,
++               0x000000ff, true);
+         switch (rows[i].id) {
+         case CMD_SET_NAME:
+             wsprintfA(value, "%s%s", h.name,
+@@ -2798,36 +2899,37 @@ void edSettingsPanel() {
+         }
+         }
+         if (rows[i].id == CMD_SET_NAME) {
+-            MakerButton *b =
+-                bt.add(mkBox(vx, row, vw, rowH - 3), CMD_SET_NAME, 0, 0, makerEd.nameEditing);
+-            mkRect(vx, row, vw, rowH - 3, makerEd.nameEditing ? 0x0b2a46ff : 0x0d141cff);
+-            mkFrame(vx, row, vw, rowH - 3, makerEd.nameEditing ? 0xffe070ff : 0x3a4d63ff);
+-            mkText(vx + 5, row + 2, value, size, 0xffffffff);
+-            (void)b;
++            // The name is typed into a score box.
++            Rect field = mkBox(vx, row, vw, bh);
++            bt.add(field, CMD_SET_NAME, 0, 0, makerEd.nameEditing);
++            mkInset(field);
++            mkText(vx + 6, row + (bh - mkLineHeight(size)) * 0.5f, value, size, 0xffffffff);
++            if (makerEd.nameEditing)
++                mkBrackets(Rect{field.l - 2, field.b - 2, field.r + 2, field.t + 2}, 5);
+         } else {
+-            bt.add(mkBox(x + 4, row - 1, w - 8, rowH - 1), CMD_WHEEL, 0, rows[i].id);
+-            MakerButton *minus = bt.add(mkBox(vx, row, 18, rowH - 3), rows[i].id, "<", -1);
+-            mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
+-            mkTextCentered(vx + vw * 0.5f, row + (rowH - 3) * 0.5f, value, size, 0xfff2b0ff, true);
+-            MakerButton *plus = bt.add(mkBox(vx + vw - 18, row, 18, rowH - 3), rows[i].id, ">", 1);
+-            mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
++            bt.add(mkBox(x + 6, row - 1, w - 12, rowH - 1), CMD_WHEEL, 0, rows[i].id);
++            edStepper(vx, vx + vw, row, bh, rows[i].id, -1, rows[i].id, 1, value, 0xffee33ff);
+         }
+         row -= rowH;
+     }
+-    MakerButton *done = bt.add(mkBox(x + w * 0.5f - 40, y + 6, 80, 17), CMD_SET_DONE, "Done");
++    MakerButton *done = bt.add(mkBox(x + w * 0.5f - 40, y + 8, 80, 18), CMD_SET_DONE, "Done");
+     mkDrawButton(*done, makerEd.mouseX, makerEd.mouseY, size);
+ }
+ 
+ void edPicker() {
+     MakerButtons &bt = makerEd.buttons;
+     bt.add(mkBox(0, 0, viewW, viewH), CMD_BACKDROP, 0, 0);
+-    mkRect(0, 0, viewW, viewH, 0x00000090);
++    mkShade(0.6f);
+     float margin = 12, x = margin, y = margin, w = viewW - margin * 2, h = viewH - margin * 2;
+-    mkPanel(x, y, w, h);
++    mkDarkPanel(mkBox(x, y, w, h), 1.6f);
+     bt.add(mkBox(x, y, w, h), CMD_BACKDROP, 0, 1);
+-    float size = 8.5f, tabH = 16, tx = x + 6, ty = y + h - tabH - 6;
++    float size = 8.5f, tabH = 16, tx = x + 8, ty = y + h - tabH - 8;
+     for (int t = 0; t < TAB_COUNT; t++) {
+-        float tw = mkTextWidth(makerTabNames[t], size, makerEd.tab == t) + 10;
++        float tw = mkButtonWidth(makerTabNames[t], size);
++        if (tx + tw > x + w - 8) {
++            tx = x + 8;
++            ty -= tabH + 3;
++        }
+         MakerButton *b =
+             bt.add(mkBox(tx, ty, tw, tabH), CMD_TAB, makerTabNames[t], t, makerEd.tab == t);
+         mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+@@ -2836,20 +2938,27 @@ void edPicker() {
+     if (edPieceTab(makerEd.tab)) {
+         const char *worlds[6] = {"All worlds", "Grasslands", "Crystal",
+                                  "Sky Ruins",  "Desert",     "Wizard"};
+-        float wx = x + 6, wy = ty - tabH - 4;
++        float wx = x + 8, wy = ty - tabH - 5;
+         for (int i = 0; i < 6; i++) {
+-            float ww = mkTextWidth(worlds[i], size) + 10;
++            float ww = mkButtonWidth(worlds[i], size);
++            if (wx + ww > x + w - 8) {
++                wx = x + 8;
++                wy -= tabH + 3;
++            }
+             MakerButton *b =
+                 bt.add(mkBox(wx, wy, ww, tabH), CMD_WORLD, worlds[i], i, makerEd.world == i);
+-            mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+-            wx += ww + 2;
++            if (i)
++                edWorldButton(*b, size);
++            else
++                mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
++            wx += ww + 3;
+         }
+         ty = wy;
+     }
+     edBuildPalette();
+-    float cell = 44, gx = x + 8, gy = ty - 6;
+-    int columns = (int)((w - 16) / (cell + 3));
+-    int rows = (int)((gy - (y + 8)) / (cell + 3));
++    float cell = 44, gx = x + 9, gy = ty - 7;
++    int columns = (int)((w - 18) / (cell + 3));
++    int rows = (int)((gy - (y + 20)) / (cell + 3));
+     if (columns < 1)
+         columns = 1;
+     if (rows < 1)
+@@ -2867,23 +2976,14 @@ void edPicker() {
+             bool hover = mkInside(box, makerEd.mouseX, makerEd.mouseY);
+             if (hover)
+                 hovered = index;
+-            mkRect(box.l, box.b, cell, cell, hover ? 0x34506eff : 0x0d141cff);
+-            mkFrame(box.l, box.b, cell, cell, 0x3a4d63ff);
+-            Rect inner = {box.l + 3, box.b + 3, box.r - 3, box.t - 3};
+-            MakerPaletteItem item = makerEd.palette[index];
+-            if (item.kind == 0)
+-                edDrawPieceIcon(makerPieces[item.index], inner);
+-            else if (item.kind == 1)
+-                edDrawDefIcon(item.index, inner, makerEd.age);
+-            else
+-                edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
++            edSlot(box, makerEd.palette[index], edCurrentItem(makerEd.palette[index]), hover);
+             bt.add(box, CMD_ITEM, 0, index);
+         }
+     if (totalRows > rows) {
+         char text[32];
+         wsprintfA(text, "Rows %d-%d of %d (wheel)", makerEd.pickerScroll + 1,
+                   makerEd.pickerScroll + rows, totalRows);
+-        mkText(x + w - mkTextWidth(text, 8) - 8, y + 4, text, 8, 0x8fa3b8ff);
++        mkText(x + w - mkTextWidth(text, 8) - 10, y + 7, text, 8, 0xb8c4d0ff);
+     }
+     if (hovered >= 0) {
+         char label[96];
+@@ -2901,14 +3001,14 @@ void edPicker() {
+                       makerObjectDefs[item.index].hint);
+         else
+             lstrcpyA(label, "Recent brush");
+-        mkText(x + 8, y + 4, label, 8.5f, 0xffffffff);
++        mkText(x + 10, y + 7, label, 8.5f, 0xffffffff);
+     }
+ }
+ 
+ void edHelp() {
+     MakerButtons &bt = makerEd.buttons;
+     bt.add(mkBox(0, 0, viewW, viewH), CMD_HELP, 0);
+-    mkRect(0, 0, viewW, viewH, 0x000000b0);
++    mkShade(0.85f);
+     const char *lines[] = {
+         "Left drag: paint / place      Right drag: erase      Middle drag or Space: pan",
+         "Shift + drag: fill a rectangle; a Fill stretches over it (sizes gems, water...)",
+@@ -2931,16 +3031,17 @@ void edHelp() {
+         w = 0;
+         for (int i = 0; i < n; i++)
+             w = maxf(w, mkTextWidth(lines[i], size));
+-        if (w <= viewW - 30 || size <= 6.5f)
++        if (w <= viewW - 40 || size <= 6.5f)
+             break;
+         size -= 0.5f;
+     }
+     float x = (viewW - w) * 0.5f, y = viewH * 0.5f + n * lh * 0.5f;
+-    mkPanel(x - 10, y - n * lh - 30, w + 20, n * lh + 46);
+-    mkTextCentered(viewW * 0.5f, y + 4, "Course Maker Controls", 11, 0xfff2b0ff, true);
++    Rect panel = {x - 14, y - n * lh - 36, x + w + 14, y + 18};
++    mkDarkPanel(panel, 1.6f);
++    mkPanelTitle(viewW * 0.5f, panel.t, "Course Maker Controls");
+     for (int i = 0; i < n; i++)
+-        mkText(x, y - (i + 1) * lh - 6, lines[i], size, 0xe8f0f8ff);
+-    mkTextCentered(viewW * 0.5f, y - n * lh - 22, "Click or press any key to close", 8, 0x8fa3b8ff);
++        mkText(x, y - (i + 1) * lh - 2, lines[i], size, 0xffffffff);
++    mkTextCentered(viewW * 0.5f, y - n * lh - 20, "Click or press any key to close", 8, 0xb8c4d0ff);
+ }
+ 
+ // Shortcut hints shown after hovering a toolbar or brush button for a moment.
+@@ -3007,31 +3108,29 @@ void edTooltip() {
+     const char *text = b ? edTooltipText(id, arg) : 0;
+     if (!text || makerEd.hoverTime < 0.5f)
+         return;
+-    float size = 8, w = mkTextWidth(text, size) + 10, h = 14;
+-    float x = clamp(makerEd.mouseX - w * 0.5f, 2, viewW - w - 2), y = b->r.b - h - 3;
++    float h = mkLineHeight(8) + 5, y = b->r.b - h - 3;
+     if (y < 2)
+         y = b->r.t + 3;
+-    mkRect(x, y, w, h, 0x000000e0);
+-    mkFrame(x, y, w, h, 0x6c8db5ff);
+-    mkText(x + 5, y + (h - mkLineHeight(size)) * 0.5f, text, size, 0xffffffff);
++    edCaption(makerEd.mouseX, y, text, 8);
+ }
+ 
+ void edRender() {
+     makerEd.buttons.clear();
+-    makerEd.toolbarH = 22;
++    MakerToolbar toolbar;
++    edToolbarLayout(toolbar);
++    makerEd.toolbarH = MAKER_TOOL_ROW * toolbar.rows;
+     makerEd.paletteH = viewH < 300 ? 52 : 60;
+     makerEd.propsW = minf(196, viewW * 0.38f);
+     if (makerEd.loading || !makerCatalogReady) {
+-        mkGradient(0, 0, viewW, viewH, 0x0d1520ff, 0x24384fff);
+-        mkTextCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff,
+-                       true);
++        mkSky(makerEd.age);
++        mkLabelCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff);
+         return;
+     }
+     edDrawCanvas();
+     edStatus();
+     edPropertyPanel();
+     edPaletteBar();
+-    edToolbar();
++    edToolbar(toolbar);
+     if (makerEd.picker)
+         edPicker();
+     if (makerEd.settings)
+diff --git a/src/maker_ui.h b/src/maker_ui.h
+index b8f5a8c..9092be0 100644
+--- a/src/maker_ui.h
++++ b/src/maker_ui.h
+@@ -1,7 +1,8 @@
+ #pragma once
+ 
+-// Course-maker drawing primitives. Glyphs are rasterised at the physical pixel size so small editor
+-// labels stay crisp at every window scale; widgets are laid out per frame and hit-tested by events.
++// Course-maker drawing primitives. Text uses the game's Vera face rasterised at the physical pixel
++// size so small labels stay crisp at every window scale; panels, buttons and plates are drawn with
++// the game's own interface sprites. Widgets are laid out per frame and hit-tested by events.
+ 
+ struct MakerGlyphFont {
+     GLuint texture;
+@@ -55,7 +56,7 @@ MakerGlyphFont *makerFont(float size, bool bold) {
+     memset(pixelsOut, 0, f->atlasW * f->atlasH * 4);
+     HFONT font = CreateFontA(-pixels, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+                              ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+-                             DEFAULT_PITCH | FF_SWISS, "Tahoma");
++                             DEFAULT_PITCH | FF_SWISS, "Bitstream Vera Sans");
+     HGDIOBJ oldFont = SelectObject(dc, font);
+     SetTextColor(dc, RGB(255, 255, 255));
+     SetBkColor(dc, RGB(0, 0, 0));
+@@ -202,6 +203,22 @@ void mkTextCentered(float cx, float cy, const char *s, float size, u32 color, bo
+            color, bold);
+ }
+ 
++// Labels on the game's art: bold text with a one-pixel dark outline, like the menu captions.
++void mkLabel(float x, float y, const char *s, float size, u32 color, u32 outline = 0x000000ff) {
++    float o = 1 / screenScale;
++    for (int dy = -1; dy <= 1; dy++)
++        for (int dx = -1; dx <= 1; dx++)
++            if (dx || dy)
++                mkText(x + dx * o, y + dy * o, s, size, outline, true);
++    mkText(x, y, s, size, color, true);
++}
++
++void mkLabelCentered(float cx, float cy, const char *s, float size, u32 color,
++                     u32 outline = 0x000000ff) {
++    mkLabel(cx - mkTextWidth(s, size, true) * 0.5f, cy - mkLineHeight(size, true) * 0.5f, s, size,
++            color, outline);
++}
++
+ void mkRect(float x, float y, float w, float h, u32 color) {
+     glDisable(GL_TEXTURE_2D);
+     mkColor(color);
+@@ -255,6 +272,10 @@ void mkTriangle(float x0, float y0, float x1, float y1, float x2, float y2, u32
+     glEnd();
+ }
+ 
++bool mkKeyDown(int vk) {
++    return (GetKeyState(vk) & 0x8000) != 0;
++}
++
+ bool mkInside(Rect r, float x, float y) {
+     return x >= r.l && x < r.r && y >= r.b && y < r.t;
+ }
+@@ -264,6 +285,246 @@ Rect mkBox(float x, float y, float w, float h) {
+     return r;
+ }
+ 
++// ---------------------------------------------------------------------------------------------
++// Game art. Panels, buttons, plates and badges reuse the game's interface sprites, so the maker
++// shares the look of the pause menu, the stage-clear panel, the options menu and level select.
++
++const u64 MKART_DARK_PANEL = 3527966682630614238ULL;  // pause menu frame
++const u64 MKART_GREEN_PANEL = 8452152779744324638ULL; // stage-clear panel
++const u64 MKART_BLACK_BOX = 448679042902946987ULL;    // stage-clear score box
++const u64 MKART_PLATE = 12885853053182338668ULL;      // pause button caption plate
++const u64 MKART_PILL = 8341643102278276ULL;           // pause caption capsule
++const u64 MKART_HUD_PLATE = 10907988386711136615ULL;  // HUD gem counter backing
++const u64 MKART_BUTTON = 10034553859779494184ULL;     // options menu button
++const u64 MKART_CHECK = 3607268909778171ULL;          // options menu tick box
++const u64 MKART_ARROW_LEFT = 17172113777224097406ULL; // touch control arrows
++const u64 MKART_ARROW_RIGHT = 17488510565532112144ULL;
++const u64 MKART_BACK = 17680337948191929366ULL;  // back button
++const u64 MKART_PLAY = 13029306334769558266ULL;  // pause menu resume button
++const u64 MKART_WRENCH = 1849765333517764545ULL; // title screen options button
++const u64 MKART_EXIT = 7519969047596594ULL;      // title screen quit button
++const u64 MKART_MUSIC = 4707166783708749431ULL;  // title screen music toggle
++const u64 MKART_GRID = 16989260046005718766ULL;  // pause menu level select button
++const u64 MKART_CLOSE = 120660973073ULL;         // level select minimise button
++const u64 MKART_STAR = 9962941732219544898ULL;   // level select award star
++const u64 MKART_SHADE = 16322964057250454020ULL; // 70% black dot stretched over scenes
++const u64 MKART_CLOUD = 159837608269ULL;         // menu background clouds
++const u64 MKART_CLOUD_SMALL[3] = {18085559403622411025ULL, 5037571874453516171ULL,
++                                  5028962873047051163ULL};
++
++// Level-select buttons in each world's colour, indexed by theme (internal world number).
++const u64 MKART_WORLD_BUTTON[6] = {7603106210754899351ULL, 7603106210754899351ULL,
++                                   3381796535512737044ULL, 196804610196ULL,
++                                   567898218697ULL,        173550608266ULL};
++// World title logos from level select, in the same order.
++const u64 MKART_WORLD_TITLE[6] = {2648011722103052292ULL,  2648011722103052292ULL,
++                                  10990406113345927767ULL, 7910687170783311935ULL,
++                                  4899196007946967ULL,     6838280465874436ULL};
++
++struct MakerArt {
++    GLuint texture;
++    float uv[8], w, h; // corner coordinates (bottom-left, bottom-right, top-left, top-right), size
++};
++
++bool mkArt(u64 klass, const char *anim, MakerArt &out, float time = 0) {
++    Actor *a = actor(klass);
++    Animation *an = animation(a, anim);
++    if (!an || !an->count)
++        return false;
++    const Frame &f = an->frames[animationFrame(an, time)];
++    if (f.texture < 0 || f.texture >= a->textureCount)
++        return false;
++    const Texture &t = a->textures[f.texture];
++    out.texture = t.gl;
++    memcpy(out.uv, f.uv, sizeof(out.uv));
++    float bx = (f.uv[2] - f.uv[0]) * t.width, by = (f.uv[3] - f.uv[1]) * t.height;
++    float lx = (f.uv[4] - f.uv[0]) * t.width, ly = (f.uv[5] - f.uv[1]) * t.height;
++    out.w = root(bx * bx + by * by);
++    out.h = root(lx * lx + ly * ly);
++    return out.w > 0 && out.h > 0;
++}
++
++// Texture coordinate of a point inside a frame, from its four corner coordinates.
++void mkUvAt(const float *uv, float fx, float fy, float *out) {
++    for (int k = 0; k < 2; k++) {
++        float bottom = uv[k] + (uv[2 + k] - uv[k]) * fx,
++              top = uv[4 + k] + (uv[6 + k] - uv[4 + k]) * fx;
++        out[k] = bottom + (top - bottom) * fy;
++    }
++}
++
++// Pixel art stays crisp when each source pixel covers a whole number of screen pixels.
++float mkPixelScale(float desired) {
++    float pixels = (float)(int)(desired * screenScale + 0.5f);
++    return (pixels < 1 ? 1 : pixels) / screenScale;
++}
++
++// Stretch a sprite over a rectangle keeping its border: corners keep their shape at `scale`
++// logical units per source pixel, edges and centre stretch.
++void mkNine(u64 klass, const char *anim, Rect r, float insetX, float insetY, float scale,
++            u32 tint = 0xffffffff) {
++    MakerArt a;
++    if (!mkArt(klass, anim, a) || r.r <= r.l || r.t <= r.b)
++        return;
++    float cx = minf(insetX * scale, (r.r - r.l) * 0.5f),
++          cy = minf(insetY * scale, (r.t - r.b) * 0.5f);
++    float xs[4] = {mkSnap(r.l), mkSnap(r.l + cx), mkSnap(r.r - cx), mkSnap(r.r)};
++    float ys[4] = {mkSnap(r.b), mkSnap(r.b + cy), mkSnap(r.t - cy), mkSnap(r.t)};
++    float ux = cx / scale / a.w, uy = cy / scale / a.h;
++    float fx[4] = {0, ux, 1 - ux, 1}, fy[4] = {0, uy, 1 - uy, 1};
++    glEnable(GL_TEXTURE_2D);
++    glBindTexture(GL_TEXTURE_2D, a.texture);
++    mkColor(tint);
++    glBegin(GL_QUADS);
++    for (int j = 0; j < 3; j++)
++        for (int i = 0; i < 3; i++) {
++            if (xs[i + 1] <= xs[i] || ys[j + 1] <= ys[j])
++                continue;
++            float uv[2];
++            mkUvAt(a.uv, fx[i], fy[j], uv);
++            glTexCoord2f(uv[0], uv[1]);
++            glVertex2f(xs[i], ys[j]);
++            mkUvAt(a.uv, fx[i + 1], fy[j], uv);
++            glTexCoord2f(uv[0], uv[1]);
++            glVertex2f(xs[i + 1], ys[j]);
++            mkUvAt(a.uv, fx[i + 1], fy[j + 1], uv);
++            glTexCoord2f(uv[0], uv[1]);
++            glVertex2f(xs[i + 1], ys[j + 1]);
++            mkUvAt(a.uv, fx[i], fy[j + 1], uv);
++            glTexCoord2f(uv[0], uv[1]);
++            glVertex2f(xs[i], ys[j + 1]);
++        }
++    glEnd();
++}
++
++// Whole sprite stretched over a rectangle.
++void mkSprite(u64 klass, const char *anim, Rect r, float alpha = 1, float time = 0,
++              float angle = 0) {
++    drawActor(actor(klass), r, anim, time, angle, false, -1, alpha);
++}
++
++// Whole sprite centred in a box at the largest size that keeps its proportions.
++void mkSpriteFit(u64 klass, const char *anim, Rect box, float alpha = 1) {
++    MakerArt a;
++    if (!mkArt(klass, anim, a))
++        return;
++    float s = minf((box.r - box.l) / a.w, (box.t - box.b) / a.h);
++    float cx = (box.l + box.r) * 0.5f, cy = (box.b + box.t) * 0.5f;
++    mkSprite(
++        klass, anim,
++        Rect{cx - a.w * s * 0.5f, cy - a.h * s * 0.5f, cx + a.w * s * 0.5f, cy + a.h * s * 0.5f},
++        alpha);
++}
++
++// Additive pass that brightens the art just drawn in a rectangle, for hover feedback.
++void mkGlow(u64 klass, const char *anim, Rect r, float insetX, float insetY, float scale,
++            float amount) {
++    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
++    mkNine(klass, anim, r, insetX, insetY, scale, 0xffffff00 | (u32)(int)(255 * amount));
++    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
++}
++
++// Dark panel from the pause menu frame. Its centre is half transparent; `fill` darkens it with
++// the game's shade (values above 1 add a second layer) so dense rows stay readable.
++void mkDarkPanel(Rect r, float fill = 0.6f) {
++    float scale = mkPixelScale(0.5f), in = 3 * scale;
++    Rect inner = {r.l + in, r.b + in, r.r - in, r.t - in};
++    for (; fill > 0; fill -= 1)
++        mkSprite(MKART_SHADE, "", inner, minf(fill, 1));
++    mkNine(MKART_DARK_PANEL, "", r, 8, 8, scale);
++}
++
++// Bevelled green panel from the stage-clear screen.
++void mkGreenPanel(Rect r) {
++    mkNine(MKART_GREEN_PANEL, "", r, 16, 16, mkPixelScale(0.5f));
++}
++
++// Black score box with its thin white rim, for thumbnails, slots and fields.
++void mkInset(Rect r, float alpha = 1) {
++    mkNine(MKART_BLACK_BOX, "", r, 7, 7, mkPixelScale(0.5f), 0xffffff00 | (u32)(int)(255 * alpha));
++}
++
++// Rounded black caption plate used under the pause menu buttons.
++void mkPlate(Rect r, float alpha = 1) {
++    float scale = mkPixelScale(minf(1, (r.t - r.b) / 24));
++    mkNine(MKART_PLATE, "", r, 12, 12, scale, 0xffffff00 | (u32)(int)(255 * alpha));
++}
++
++// Black capsule behind the pause captions, for numbers and values.
++void mkPill(Rect r, float alpha = 1) {
++    float scale = mkPixelScale(minf(1, (r.t - r.b) / 16));
++    mkNine(MKART_PILL, "", r, 8, 8, scale, 0xffffff00 | (u32)(int)(255 * alpha));
++}
++
++// Translucent plate behind the HUD gem counter, for status text over the course.
++void mkHudPlate(Rect r) {
++    mkNine(MKART_HUD_PLATE, "", r, 8, 8, mkPixelScale(minf(1, (r.t - r.b) / 16)));
++}
++
++// Darken the screen behind a dialog with the game's stretched shade dot.
++void mkShade(float alpha = 1) {
++    mkSprite(MKART_SHADE, "", Rect{0, 0, viewW, viewH}, alpha);
++}
++
++// Options-menu button art; pressed buttons use the darker frame.
++void mkButtonArt(Rect r, bool down, bool hover, bool disabled) {
++    float scale = mkPixelScale(minf(1, (r.t - r.b) / 32));
++    mkNine(MKART_BUTTON, down ? "down" : "up", r, 6, 6, scale, disabled ? 0x8c8c8cff : 0xffffffff);
++    if (hover && !disabled)
++        mkGlow(MKART_BUTTON, down ? "down" : "up", r, 6, 6, scale, 0.18f);
++}
++
++// Level-select button in a theme's colour, stretched into a card or button frame. The art has an
++// 8 pixel transparent border, so it is drawn that much larger to fill the rectangle.
++void mkWorldFrame(Rect r, int theme, const char *anim = "up", float alpha = 1, float glow = 0) {
++    u64 klass = MKART_WORLD_BUTTON[(int)clamp((float)theme, 0, 5)];
++    float scale = mkPixelScale(minf(0.5f, (r.t - r.b) / 20)), m = 8 * scale;
++    Rect art = {r.l - m, r.b - m, r.r + m, r.t + m};
++    mkNine(klass, anim, art, 15, 15, scale, 0xffffff00 | (u32)(int)(255 * alpha));
++    if (glow > 0)
++        mkGlow(klass, anim, art, 15, 15, scale, glow);
++}
++
++// The game's focus marker: white corner brackets with a black outline.
++void mkBrackets(Rect r, float length = 5) {
++    for (int pass = 0; pass < 2; pass++) {
++        float width = pass ? 0.75f : 2.0f;
++        u32 c = pass ? 0xffffffff : 0x000000ff;
++        const Vec corners[] = {{r.l, r.b}, {r.r, r.b}, {r.r, r.t}, {r.l, r.t}};
++        for (int i = 0; i < 4; i++) {
++            float x = corners[i].x, y = corners[i].y, sx = i == 0 || i == 3 ? 1.0f : -1.0f,
++                  sy = i < 2 ? 1.0f : -1.0f;
++            mkRect(minf(x, x + sx * length) - width * 0.5f, y - width * 0.5f, length + width, width,
++                   c);
++            mkRect(x - width * 0.5f, minf(y, y + sy * length) - width * 0.5f, width, length + width,
++                   c);
++        }
++    }
++}
++
++// Remainder of v / m in [0, m), for scrolling decorations.
++float mkWrap(float v, float m) {
++    float q = v / m;
++    int whole = (int)q;
++    if ((float)whole > q)
++        whole--;
++    return v - whole * m;
++}
++
++// Menu backdrop: the options-menu sky with drifting clouds along the bottom.
++void mkSky(float age) {
++    mkGradient(0, 0, viewW, viewH, 0xa8e2ffff, 0x57c4ffff);
++    for (int i = 0; i < 4; i++) {
++        float w = 254 + i * 40.0f, speed = 6 + i * 3.0f;
++        float x = mkWrap(age * speed + i * 260, viewW + w) - w,
++              y = viewH * (0.55f + 0.1f * (i & 1));
++        mkSprite(MKART_CLOUD_SMALL[i % 3], "", mkBox(x, y, w * 0.5f, w * 0.12f), 0.9f);
++    }
++    float cw = 241, ch = 84;
++    for (float x = -mkWrap(age * 4, cw); x < viewW; x += cw)
++        mkSprite(MKART_CLOUD, "", mkBox(x, -8, cw, ch));
++}
++
+ // A clickable widget recorded by the layout pass; events and drawing both use these rectangles.
+ struct MakerButton {
+     Rect r;
+@@ -302,25 +563,49 @@ struct MakerButtons {
+     }
+ };
+ 
+-// Shared look for maker buttons: dark glass with a warm highlight for toggles and hover.
+-void mkDrawButton(const MakerButton &b, float mouseX, float mouseY, float size = 9) {
++// Text buttons are the options-menu buttons with their black bold captions (destructive ones
++// use the menu's red). Toggled buttons stay pressed with a white caption; disabled ones grey out.
++void mkDrawButton(const MakerButton &b, float mouseX, float mouseY, float size = 9,
++                  u32 caption = 0x000000ff) {
+     bool hover = !b.disabled && mkInside(b.r, mouseX, mouseY);
+-    u32 bottom = b.on ? 0xd08a1cff : hover ? 0x3d5a80ff : 0x243447ff;
+-    u32 top = b.on ? 0xf6c445ff : hover ? 0x5a7fb0ff : 0x34495eff;
+-    mkGradient(b.r.l, b.r.b, b.r.r - b.r.l, b.r.t - b.r.b, bottom, top);
+-    mkFrame(b.r.l, b.r.b, b.r.r - b.r.l, b.r.t - b.r.b, b.on ? 0xfff2b0ff : 0x0b1520ff);
++    bool down = b.on || (hover && mkKeyDown(VK_LBUTTON));
++    mkButtonArt(b.r, down, hover, b.disabled);
+     if (b.label && *b.label)
+-        mkTextCentered((b.r.l + b.r.r) * 0.5f, (b.r.b + b.r.t) * 0.5f, b.label, size,
+-                       b.disabled ? 0x8090a0ff
+-                       : b.on     ? 0x2a1600ff
+-                                  : 0xf2f6faff,
+-                       b.on);
++        mkTextCentered((b.r.l + b.r.r) * 0.5f, (b.r.b + b.r.t) * 0.5f - (down ? 0.5f : 0), b.label,
++                       size,
++                       b.disabled ? 0x00000070
++                       : down     ? 0xffffffff
++                                  : caption,
++                       true);
+ }
+ 
+-void mkPanel(float x, float y, float w, float h, u32 fill = 0x101a26ee) {
+-    mkRect(x + 2 / screenScale, y - 2 / screenScale, w, h, 0x00000060);
+-    mkRect(x, y, w, h, fill);
+-    mkFrame(x, y, w, h, 0x6c8db5ff);
++// Width of a text button that fits its caption.
++float mkButtonWidth(const char *label, float size, float pad = 12) {
++    return mkTextWidth(label, size, true) + pad;
++}
++
++// Round touch-control arrow; it lights up under the pointer.
++void mkDrawArrow(const MakerButton &b, bool left, float mouseX, float mouseY) {
++    bool hover = !b.disabled && mkInside(b.r, mouseX, mouseY);
++    float side = minf(b.r.r - b.r.l, b.r.t - b.r.b);
++    Rect r = mkBox((b.r.l + b.r.r - side) * 0.5f, (b.r.b + b.r.t - side) * 0.5f, side, side);
++    mkSprite(left ? MKART_ARROW_LEFT : MKART_ARROW_RIGHT, hover ? "on" : "off", r,
++             b.disabled ? 0.3f : 1);
++}
++
++// A game icon button (back, play, options...): it shows its pressed frame under the pointer.
++void mkDrawIcon(const MakerButton &b, u64 klass, float mouseX, float mouseY) {
++    bool hover = !b.disabled && mkInside(b.r, mouseX, mouseY);
++    float side = minf(b.r.r - b.r.l, b.r.t - b.r.b);
++    Rect r = mkBox((b.r.l + b.r.r - side) * 0.5f, (b.r.b + b.r.t - side) * 0.5f, side, side);
++    mkSprite(klass, hover || b.on ? "down" : "up", r, b.disabled ? 0.4f : 1);
++}
++
++// Dialog title: a yellow caption on a black plate straddling the panel's top edge.
++void mkPanelTitle(float cx, float top, const char *title, float size = 11) {
++    float w = mkTextWidth(title, size, true) + 24, h = mkLineHeight(size, true) + 8;
++    mkPlate(mkBox(cx - w * 0.5f, top - h * 0.5f, w, h));
++    mkTextCentered(cx, top, title, size, 0xffee33ff, true);
+ }
+ 
+ // Format a float with fixed decimals; wsprintf has no floating point support.
+@@ -373,10 +658,6 @@ void mkMove(void *dst, const void *src, u32 n) {
+     memcpy(dst, mkMoveBuffer, n);
+ }
+ 
+-bool mkKeyDown(int vk) {
+-    return (GetKeyState(vk) & 0x8000) != 0;
+-}
+-
+ // A short-lived message shown near the bottom of maker screens.
+ struct MakerToast {
+     char text[96];
+@@ -393,13 +674,14 @@ void mkToast(const char *text, u32 color = 0xffffffff, float life = 2.2f) {
+     makerToast.color = color;
+ }
+ 
++// Toasts sit on the pause menu's caption plate.
+ void mkDrawToast() {
+     if (makerToast.age >= makerToast.life || !makerToast.text[0])
+         return;
+     float alpha = clamp((makerToast.life - makerToast.age) * 3, 0, 1);
+-    float size = 10, w = mkTextWidth(makerToast.text, size, true) + 20, h = 20;
+-    float x = (viewW - w) * 0.5f, y = viewH * 0.5f - 10;
+-    mkRect(x, y, w, h, (u32)(int)(200 * alpha));
+-    mkText(x + 10, y + (h - mkLineHeight(size, true)) * 0.5f, makerToast.text, size,
++    float size = 10, w = mkTextWidth(makerToast.text, size, true) + 28, h = 22;
++    float x = (viewW - w) * 0.5f, y = viewH * 0.5f - 11;
++    mkPlate(mkBox(x, y, w, h), alpha * 0.92f);
++    mkText(x + 14, y + (h - mkLineHeight(size, true)) * 0.5f, makerToast.text, size,
+            (makerToast.color & 0xffffff00) | (u32)(int)(255 * alpha), true);
+ }

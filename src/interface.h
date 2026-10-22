@@ -1080,6 +1080,13 @@ void layerOffset(UiScene &s, int layer, float *x, float *y) {
         t.y += selectorLayerSlide(s);
     if (&s == &hudScene && screen == COMPLETE && layer == 2)
         t.y += completionUiPose().remainingUiOffsetY;
+    // Chapter artwork and its press shade share one physical-pixel camera origin. A fractional
+    // camera otherwise lets the atlas edge and the flat shade round onto different screen rows.
+    if (s.level.id == 18006219643615701355ULL && layer == 1) {
+        float px = t.x * screenScale, py = t.y * screenScale;
+        t.x = (float)(int)(px + (px < 0 ? -.5f : .5f)) / screenScale;
+        t.y = (float)(int)(py + (py < 0 ? -.5f : .5f)) / screenScale;
+    }
     *x = t.x;
     *y = t.y;
 }
@@ -1261,12 +1268,20 @@ void drawUiNode(UiScene &s, UiNode &n, int index) {
     }
     if (pointerHeld && !pointerDragged && pointerScene == s.level.id && pointerNode == index &&
         buttonProps(o) && !n.disabled) {
+        animationTime = 0;
         if (o.has("MusicToggleBehaviour"))
             anim = musicEnabled ? "down-on" : "down-off";
         else if (o.has("SFXToggleBehaviour"))
             anim = soundEnabled ? "down-on" : "down-off";
         else
             anim = "down";
+    }
+    if (s.level.id == 18006219643615701355ULL &&
+        (o.has("WorldButtonBehaviour") || o.has("WorldLevelButtonBehaviour")) && eq(anim, "down")) {
+        // The authored down frame is a uniform 70% black 2x2 swatch. Draw its exact colour
+        // directly so sampling a stretched atlas swatch cannot introduce a fringe.
+        box(r.l, r.b, r.r - r.l, r.t - r.b, 0, 0, 0, 179 / 255.0f);
+        return;
     }
     if (screen == ENDING && &s == &page) {
         EndingCreditsPresentation pose = endingCreditsPresentation(endingCreditsScene.input, s.age);

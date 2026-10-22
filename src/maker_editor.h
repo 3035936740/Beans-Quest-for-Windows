@@ -37,7 +37,8 @@ enum MakerDrag {
     DRAG_MOVE,
     DRAG_START,
     DRAG_RESIZE,
-    DRAG_BOUNDS
+    DRAG_BOUNDS,
+    DRAG_ERASE_RECT
 };
 
 enum MakerCommand {
@@ -1802,7 +1803,9 @@ void edDrawWater(Rect r, float alpha, int index) {
     }
 }
 
-void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int index = -1) {
+// Without `marks` only the object's artwork is drawn, as in the course list photos.
+void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int index = -1,
+                  bool marks = true) {
     const MakerObjectDef *d = makerDefFor(o.klass);
     if (!d)
         return;
@@ -1877,6 +1880,8 @@ void edDrawObject(const MakerObject &o, float dx, float dy, float alpha, int ind
         edPendulumParts(m, *d, true, alpha);
     if (klass == MAKER_CLASS_SWITCH)
         edDrawSwitchInsert(r, makerEd.age, alpha);
+    if (!marks)
+        return;
     // Editor-only colour tag of the switch group: switches, switch blocks, spikes that follow a
     // group and enemies that flip one when defeated. In play every group looks alike.
     int tag = makerParamIndex(*d, WRITE_DEFEAT), shift = 0;
@@ -2231,7 +2236,8 @@ void edDrawCanvas() {
         t.t = r.t;
         edDrawTile(t, 0, 0, 0.6f);
     }
-    if (makerEd.drag == DRAG_RECT || makerEd.drag == DRAG_MARQUEE) {
+    if (makerEd.drag == DRAG_RECT || makerEd.drag == DRAG_MARQUEE ||
+        makerEd.drag == DRAG_ERASE_RECT) {
         Rect r = edDragRect(makerEd.dragWorldX, makerEd.dragWorldY, wx, wy);
         if (makerEd.drag == DRAG_RECT && makerEd.brush.object) {
             const MakerBrush &b = makerEd.brush;
@@ -2259,8 +2265,10 @@ void edDrawCanvas() {
         if (makerEd.drag == DRAG_MARQUEE)
             r = Rect{minf(makerEd.dragWorldX, wx), minf(makerEd.dragWorldY, wy),
                      maxf(makerEd.dragWorldX, wx), maxf(makerEd.dragWorldY, wy)};
-        mkRect(r.l, r.b, r.r - r.l, r.t - r.b, 0xffe07030);
-        mkFrame(r.l, r.b, r.r - r.l, r.t - r.b, 0xffe070ff, 1 / makerEd.zoom);
+        bool erasing = makerEd.drag == DRAG_ERASE_RECT;
+        mkRect(r.l, r.b, r.r - r.l, r.t - r.b, erasing ? 0xff404040 : 0xffe07030);
+        mkFrame(r.l, r.b, r.r - r.l, r.t - r.b, erasing ? 0xff4040ff : 0xffe070ff,
+                1 / makerEd.zoom);
     }
     if (canvas && makerEd.drag == DRAG_NONE) {
         bool erase = makerEd.tool == TOOL_ERASE, alt = mkKeyDown(VK_MENU),
@@ -2354,70 +2362,115 @@ struct MakerToolSpec {
     const char *label;
     int id, arg;
     bool on;
+    u64 icon; // a game icon button instead of a text button
 };
 
-// Width of a row of labelled buttons; null labels are group gaps.
-float edRowWidth(const MakerToolSpec *specs, int count, float size, float gap) {
+// The toolbar's two groups and how they fit the window: smaller captions first, then tighter
+// buttons, then the right-hand group moves to a second row.
+struct MakerToolbar {
+    MakerToolSpec left[12], right[6];
+    char grid[16];
+    float size, pad;
+    int rows;
+};
+
+const float MAKER_TOOL_BUTTON = 18;
+
+// Keep controls beyond the pause-frame rim at every physical pixel scale.
+float edPanelPadding() {
+    return 8 * mkPixelScale(.5f) + 3;
+}
+
+float edToolRowHeight() {
+    return MAKER_TOOL_BUTTON + edPanelPadding() * 2;
+}
+
+// Width of a row of buttons; null labels are group gaps and icon buttons are square.
+float edRowWidth(const MakerToolSpec *specs, int count, float size, float pad, float icon) {
     float w = 0;
     for (int i = 0; i < count; i++)
-        w += specs[i].label ? mkTextWidth(specs[i].label, size, specs[i].on) + 10 + gap : 5;
+        w += specs[i].icon    ? icon + 2
+             : specs[i].label ? mkButtonWidth(specs[i].label, size, pad) + 2
+                              : 5;
     return w;
 }
 
-void edToolbar() {
+void edToolbarLayout(MakerToolbar &t) {
+    wsprintfA(t.grid, "Grid %d", makerEd.grid);
+    const MakerToolSpec left[12] = {{"Play", CMD_PLAY, 0, false, MKART_PLAY},
+                                    {"Pen", CMD_TOOL, TOOL_PEN, makerEd.tool == TOOL_PEN},
+                                    {"Erase", CMD_TOOL, TOOL_ERASE, makerEd.tool == TOOL_ERASE},
+                                    {"Select", CMD_TOOL, TOOL_SELECT, makerEd.tool == TOOL_SELECT},
+                                    {"Hand", CMD_TOOL, TOOL_HAND, makerEd.tool == TOOL_HAND},
+                                    {0, 0, 0, false},
+                                    {"Back", CMD_LAYER, MAKER_BACK, makerEd.layer == MAKER_BACK},
+                                    {"Main", CMD_LAYER, MAKER_MAIN, makerEd.layer == MAKER_MAIN},
+                                    {"Front", CMD_LAYER, MAKER_FRONT, makerEd.layer == MAKER_FRONT},
+                                    {0, 0, 0, false},
+                                    {"Undo", CMD_UNDO, 0, false},
+                                    {"Redo", CMD_REDO, 0, false}};
+    const MakerToolSpec right[6] = {{"Exit", CMD_EXIT, 0, false, MKART_EXIT},
+                                    {"Save", CMD_SAVE, 0, false},
+                                    {"Course", CMD_SETTINGS, 0, makerEd.settings, MKART_WRENCH},
+                                    {"?", CMD_HELP, 0, makerEd.help},
+                                    {"Hitbox", CMD_VIEW_COLLISION, 0, makerEd.showCollision},
+                                    {t.grid, CMD_GRID, 0, false}};
+    memcpy(t.left, left, sizeof(left));
+    memcpy(t.right, right, sizeof(right));
+    float icon = MAKER_TOOL_BUTTON;
+    for (t.rows = 1; t.rows <= 2; t.rows++)
+        for (t.size = 8.5f, t.pad = 12;;) {
+            float l = edRowWidth(t.left, 12, t.size, t.pad, icon),
+                  r = edRowWidth(t.right, 6, t.size, t.pad, icon);
+            if ((t.rows == 1 ? l + r : maxf(l, r)) + 16 <= viewW)
+                return;
+            if (t.size > 6.5f)
+                t.size -= 0.5f;
+            else if (t.pad > 7)
+                t.pad -= 1;
+            else
+                break;
+        }
+    t.rows = 2;
+}
+
+// Icons and text share the row height, with the same clearance from the frame.
+MakerButton *edToolButton(const MakerToolSpec &s, float x, float y, float h, float size,
+                          float pad) {
     MakerButtons &bt = makerEd.buttons;
-    float h = makerEd.toolbarH, y = viewH - h, x = 4, size = 8.5f;
-    mkGradient(0, y, viewW, h, 0x16212dff, 0x223244ff);
-    mkRect(0, y, viewW, 1 / screenScale, 0x000000ff);
-    typedef MakerToolSpec Spec;
-    const Spec left[] = {{"> Play", CMD_PLAY, 0, false},
-                         {"Pen", CMD_TOOL, TOOL_PEN, makerEd.tool == TOOL_PEN},
-                         {"Erase", CMD_TOOL, TOOL_ERASE, makerEd.tool == TOOL_ERASE},
-                         {"Select", CMD_TOOL, TOOL_SELECT, makerEd.tool == TOOL_SELECT},
-                         {"Hand", CMD_TOOL, TOOL_HAND, makerEd.tool == TOOL_HAND},
-                         {0, 0, 0, false},
-                         {"Back", CMD_LAYER, MAKER_BACK, makerEd.layer == MAKER_BACK},
-                         {"Main", CMD_LAYER, MAKER_MAIN, makerEd.layer == MAKER_MAIN},
-                         {"Front", CMD_LAYER, MAKER_FRONT, makerEd.layer == MAKER_FRONT},
-                         {0, 0, 0, false},
-                         {"Undo", CMD_UNDO, 0, false},
-                         {"Redo", CMD_REDO, 0, false}};
-    char gridLabel[16];
-    wsprintfA(gridLabel, "Grid %d", makerEd.grid);
-    const Spec right[] = {{"Exit", CMD_EXIT, 0, false},
-                          {"Save", CMD_SAVE, 0, false},
-                          {"Course", CMD_SETTINGS, 0, makerEd.settings},
-                          {"?", CMD_HELP, 0, makerEd.help},
-                          {"Hitbox", CMD_VIEW_COLLISION, 0, makerEd.showCollision},
-                          {gridLabel, CMD_GRID, 0, false}};
-    const int leftCount = (int)(sizeof(left) / sizeof(left[0])),
-              rightCount = (int)(sizeof(right) / sizeof(right[0]));
-    // Narrow windows (1024x768 gives a 512-unit view) shrink the labels before dropping any.
-    while (size > 6.5f &&
-           edRowWidth(left, leftCount, size, 2) + edRowWidth(right, rightCount, size, 2) + 16 >
-               viewW)
-        size -= 0.5f;
-    for (int i = 0; i < leftCount; i++) {
-        if (!left[i].label) {
+    float w = s.icon ? h : mkButtonWidth(s.label, size, pad);
+    Rect r = mkBox(x, y, w, h);
+    MakerButton *b = bt.add(r, s.id, s.icon ? 0 : s.label, s.arg, s.on);
+    if (s.icon)
+        mkDrawIcon(*b, s.icon, makerEd.mouseX, makerEd.mouseY);
+    else
+        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+    return b;
+}
+
+void edToolbar(const MakerToolbar &t) {
+    float rowH = edToolRowHeight(), y = viewH - makerEd.toolbarH, bh = MAKER_TOOL_BUTTON,
+          row = viewH - rowH + edPanelPadding();
+    // The pause menu frame runs off the top of the screen; its green rim edges the bar.
+    mkDarkPanel(Rect{-8, y, viewW + 8, viewH + 8}, 0.75f);
+    float x = 4;
+    for (int i = 0; i < 12; i++) {
+        if (!t.left[i].label) {
             x += 5;
             continue;
         }
-        float w = mkTextWidth(left[i].label, size, left[i].on) + 10;
-        MakerButton *b =
-            bt.add(mkBox(x, y + 2, w, h - 4), left[i].id, left[i].label, left[i].arg, left[i].on);
-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
-        x += w + 2;
+        x = edToolButton(t.left[i], x, row, bh, t.size, t.pad)->r.r + 2;
+    }
+    if (t.rows > 1) {
+        row -= rowH;
+        x = 4;
     }
     float rx = viewW - 4;
-    for (int i = 0; i < rightCount; i++) {
-        float w = mkTextWidth(right[i].label, size, right[i].on) + 10;
-        rx -= w;
-        if (rx < x + 40)
+    for (int i = 0; i < 6; i++) {
+        float w = t.right[i].icon ? bh : mkButtonWidth(t.right[i].label, t.size, t.pad);
+        if (rx - w < x + 4)
             break;
-        MakerButton *b = bt.add(mkBox(rx, y + 2, w, h - 4), right[i].id, right[i].label,
-                                right[i].arg, right[i].on);
-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
-        rx -= 2;
+        rx = edToolButton(t.right[i], rx - w, row, bh, t.size, t.pad)->r.l - 2;
     }
     // Course name between the two groups when there is room.
     char title[64];
@@ -2425,28 +2478,77 @@ void edToolbar() {
               makerEd.dirty ? " *" : "");
     float tw = mkTextWidth(title, 9, true);
     if (rx - x > tw + 12)
-        mkText((x + rx - tw) * 0.5f, y + (h - mkLineHeight(9, true)) * 0.5f, title, 9, 0xfff2b0ff,
-               true);
+        mkText((x + rx - tw) * 0.5f, row + (bh - mkLineHeight(9, true)) * 0.5f, title, 9,
+               0xffee33ff, true);
+}
+
+// World filters share the normal rectangular button, recoloured in code for each world.
+void edWorldButton(const MakerButton &b, float size) {
+    char digit[4];
+    wsprintfA(digit, "%d", b.arg);
+    MakerButton button = b;
+    button.label = b.label ? b.label : digit;
+    mkDrawButton(button, makerEd.mouseX, makerEd.mouseY, size, 0x000000ff, b.arg);
+}
+
+// Palette and picker slots are the stage-clear score box; the brush in use gets the focus brackets.
+void edSlot(Rect r, const MakerPaletteItem &item, bool current, bool hover) {
+    mkInset(r);
+    if (hover)
+        mkGlow(MKART_BLACK_BOX, "", r, 7, 7, mkPixelScale(0.5f), 0.14f);
+    Rect inner = {r.l + 3, r.b + 3, r.r - 3, r.t - 3};
+    if (item.kind == 0)
+        edDrawPieceIcon(makerPieces[item.index], inner);
+    else if (item.kind == 1)
+        edDrawDefIcon(item.index, inner, makerEd.age);
+    else
+        edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
+    if (current)
+        mkBrackets(Rect{r.l - 1, r.b - 1, r.r + 1, r.t + 1}, 5);
+}
+
+bool edCurrentItem(const MakerPaletteItem &item) {
+    if (item.kind == 0)
+        return !makerEd.brush.object && makerEd.brush.piece == item.index;
+    return item.kind == 1 && makerEd.brush.object && makerEd.brush.def == item.index;
+}
+
+// Caption on a black plate, kept inside the screen.
+void edCaption(float cx, float y, const char *text, float size) {
+    float w = mkTextWidth(text, size) + 14, h = mkLineHeight(size) + 5;
+    float x = clamp(cx - w * 0.5f, 2, viewW - w - 2);
+    mkPlate(mkBox(x, y, w, h), 0.92f);
+    mkText(x + 7, y + (h - mkLineHeight(size)) * 0.5f, text, size, 0xffffffff);
 }
 
 void edPaletteBar() {
     MakerButtons &bt = makerEd.buttons;
-    float h = makerEd.paletteH, tabH = 15, size = 8;
-    mkGradient(0, 0, viewW, h, 0x121b26ff, 0x1d2b3bff);
-    mkRect(0, h - 1 / screenScale, viewW, 1 / screenScale, 0x000000ff);
-    float tabsWidth = 0;
-    for (int t = 0; t < TAB_COUNT; t++)
-        tabsWidth += mkTextWidth(makerTabNames[t], size, true) + 9;
+    float h = makerEd.paletteH, tabH = 15, size = 8, inset = edPanelPadding();
+    // The pause menu frame runs off the bottom of the screen; its rim edges the palette.
+    mkDarkPanel(Rect{-8, -8, viewW + 8, h}, 0.75f);
+    // Narrow windows shrink the captions, then the buttons, then leave the world filter to the
+    // picker.
     bool worlds = edPieceTab(makerEd.tab);
-    while (size > 6.5f && tabsWidth + (worlds ? 150 : 0) > viewW) {
-        size -= 0.5f;
-        tabsWidth = 0;
+    float pad = 12;
+    for (;;) {
+        float tabsWidth = 4;
         for (int t = 0; t < TAB_COUNT; t++)
-            tabsWidth += mkTextWidth(makerTabNames[t], size, true) + 9;
+            tabsWidth += mkButtonWidth(makerTabNames[t], size, pad) + 1;
+        float worldsW = worlds ? mkButtonWidth("All", size, pad) + 5 * (tabH + 1) + 6 : 0;
+        if (tabsWidth + worldsW + 6 <= viewW)
+            break;
+        if (size > 6.5f)
+            size -= 0.5f;
+        else if (pad > 7)
+            pad -= 1;
+        else if (worlds)
+            worlds = false;
+        else
+            break;
     }
-    float x = 3, ty = h - tabH - 1;
+    float x = 3, ty = h - tabH - inset;
     for (int t = 0; t < TAB_COUNT; t++) {
-        float w = mkTextWidth(makerTabNames[t], size, makerEd.tab == t) + 8;
+        float w = mkButtonWidth(makerTabNames[t], size, pad);
         if (t == TAB_ITEMS)
             x += 4;
         MakerButton *b =
@@ -2454,68 +2556,54 @@ void edPaletteBar() {
         mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
         x += w + 1;
     }
-    if (edPieceTab(makerEd.tab)) {
-        const char *worlds[6] = {"All", "W1", "W2", "W3", "W4", "W5"};
+    if (worlds) {
         float wx = viewW - 3;
         for (int i = 5; i >= 0; i--) {
-            float w = mkTextWidth(worlds[i], size) + 8;
+            float w = i ? tabH : mkButtonWidth("All", size, pad);
             wx -= w;
             if (wx < x + 4)
                 break;
             MakerButton *b =
-                bt.add(mkBox(wx, ty, w, tabH), CMD_WORLD, worlds[i], i, makerEd.world == i);
-            mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+                bt.add(mkBox(wx, ty, w, tabH), CMD_WORLD, i ? 0 : "All", i, makerEd.world == i);
+            if (i)
+                edWorldButton(*b, size);
+            else
+                mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
             wx -= 1;
         }
     }
     edBuildPalette();
-    float cell = h - tabH - 6, sx = 16, y0 = 2;
-    int visible = (int)((viewW - sx * 2 - 4 - 52) / (cell + 2));
+    float cell = ty - 6, arrow = 16, y0 = 3, sx = 3 + arrow + 3;
+    int visible = (int)((viewW - sx - arrow - 6 - cell - 6) / (cell + 2));
     if (visible < 1)
         visible = 1;
     int maxScroll = makerEd.paletteCount - visible;
     makerEd.scroll = (int)clamp((float)makerEd.scroll, 0, (float)(maxScroll > 0 ? maxScroll : 0));
     MakerButton *lb =
-        bt.add(mkBox(2, y0, sx - 2, cell), CMD_SCROLL, "<", -visible, false, makerEd.scroll <= 0);
-    mkDrawButton(*lb, makerEd.mouseX, makerEd.mouseY, size);
+        bt.add(mkBox(3, y0, arrow, cell), CMD_SCROLL, 0, -visible, false, makerEd.scroll <= 0);
+    mkDrawArrow(*lb, true, makerEd.mouseX, makerEd.mouseY);
     int hovered = -1;
     for (int i = 0; i < visible && makerEd.scroll + i < makerEd.paletteCount; i++) {
         int index = makerEd.scroll + i;
-        Rect r = mkBox(sx + 2 + i * (cell + 2), y0, cell, cell);
-        MakerPaletteItem item = makerEd.palette[index];
-        bool current = false;
-        if (item.kind == 0)
-            current = !makerEd.brush.object && makerEd.brush.piece == item.index;
-        else if (item.kind == 1)
-            current = makerEd.brush.object && makerEd.brush.def == item.index;
+        Rect r = mkBox(sx + i * (cell + 2), y0, cell, cell);
         bool hover = mkInside(r, makerEd.mouseX, makerEd.mouseY);
         if (hover)
             hovered = index;
-        mkRect(r.l, r.b, r.r - r.l, r.t - r.b,
-               current ? 0x6a5a20ff
-               : hover ? 0x34506eff
-                       : 0x0d141cff);
-        mkFrame(r.l, r.b, r.r - r.l, r.t - r.b, current ? 0xffe070ff : 0x3a4d63ff);
-        Rect inner = {r.l + 2, r.b + 2, r.r - 2, r.t - 2};
-        if (item.kind == 0)
-            edDrawPieceIcon(makerPieces[item.index], inner);
-        else if (item.kind == 1)
-            edDrawDefIcon(item.index, inner, makerEd.age);
-        else
-            edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
+        edSlot(r, makerEd.palette[index], edCurrentItem(makerEd.palette[index]), hover);
         bt.add(r, CMD_ITEM, 0, index);
     }
     if (!makerEd.paletteCount)
         mkText(sx + 6, y0 + cell * 0.5f - 4,
                makerEd.tab == TAB_RECENT ? "Pick items from the other tabs" : "Nothing here yet", 8,
-               0x8fa3b8ff);
-    float rx = sx + 2 + visible * (cell + 2);
-    MakerButton *rb = bt.add(mkBox(rx, y0, sx - 2, cell), CMD_SCROLL, ">", visible, false,
+               0xb8c4d0ff);
+    float rx = sx + visible * (cell + 2) + 1;
+    MakerButton *rb = bt.add(mkBox(rx, y0, arrow, cell), CMD_SCROLL, 0, visible, false,
                              makerEd.scroll >= maxScroll);
-    mkDrawButton(*rb, makerEd.mouseX, makerEd.mouseY, size);
+    mkDrawArrow(*rb, false, makerEd.mouseX, makerEd.mouseY);
+    // Every brick and item: the pause menu's level select button.
     MakerButton *all =
-        bt.add(mkBox(viewW - 50, y0, 47, cell), CMD_PICKER, "All...", 0, makerEd.picker);
-    mkDrawButton(*all, makerEd.mouseX, makerEd.mouseY, size);
+        bt.add(mkBox(viewW - 4 - cell, y0, cell, cell), CMD_PICKER, 0, 0, makerEd.picker);
+    mkDrawIcon(*all, MKART_GRID, makerEd.mouseX, makerEd.mouseY);
     if (hovered >= 0) {
         char label[96];
         MakerPaletteItem item = makerEd.palette[hovered];
@@ -2532,17 +2620,15 @@ void edPaletteBar() {
                       makerObjectDefs[item.index].hint);
         else
             lstrcpyA(label, "Recent brush");
-        float w = mkTextWidth(label, 8) + 10;
-        float lx = clamp(makerEd.mouseX - w * 0.5f, 2, viewW - w - 2);
-        mkRect(lx, h + 3, w, 14, 0x000000d0);
-        mkText(lx + 5, h + 4, label, 8, 0xffffffff);
+        edCaption(makerEd.mouseX, h + 4, label, 8);
     }
 }
 
-// Status strip on the canvas: cursor, brush part and collision, course budget and warnings.
+// Status strip on the canvas: cursor, brush part and collision, course budget and warnings, on
+// the HUD's translucent plates.
 void edStatus() {
     MakerButtons &bt = makerEd.buttons;
-    float y = edCanvasTop() - 13, size = 8;
+    float y = edCanvasTop() - 14, size = 8;
     // Brush buttons sit on the right; the status text shortens when they would overlap it.
     bool brush = makerEd.tool == TOOL_PEN && !makerEd.brush.object;
     const char *labels[4] = {"Flip V", "Flip H", "Rotate", 0};
@@ -2553,10 +2639,17 @@ void edStatus() {
     wsprintfA(coll, "Hitbox: %s%s", edCollideName(edBrushCollide(makerEd.layer)),
               makerEd.brush.collideMode < 0 ? " (auto)" : "");
     float right = viewW - 4 - (makerEd.propObject >= 0 ? makerEd.propsW : 0), buttonsW = 0;
-    if (brush) {
+    float buttonSize = size, pad = 12;
+    while (brush) {
+        buttonsW = mkButtonWidth(coll, buttonSize, pad);
         for (int i = 0; i < 4; i++)
-            buttonsW += mkTextWidth(labels[i], size) + 10;
-        buttonsW += mkTextWidth(coll, size) + 8;
+            buttonsW += mkButtonWidth(labels[i], buttonSize, pad) + 2;
+        if (buttonsW <= right - 4 || pad <= 7)
+            break;
+        if (buttonSize > 6.5f)
+            buttonSize -= 0.5f;
+        else
+            pad -= 1;
     }
     char text[160];
     float wx = edWorldX(makerEd.mouseX), wy = edWorldY(makerEd.mouseY);
@@ -2565,11 +2658,15 @@ void edStatus() {
               makerRound(makerEd.zoom * 100), makerFloor(wx / 32), makerFloor(wy / 32),
               layers[makerEd.layer], makerEd.level.tileCount, makerEd.entityCost,
               MAX_ENTITIES - 160);
-    if (mkTextWidth(text, size) + 16 > right - buttonsW)
+    if (mkTextWidth(text, size) + 20 > right - buttonsW)
         wsprintfA(text, "%d%%  x %d y %d  %s", makerRound(makerEd.zoom * 100), makerFloor(wx / 32),
                   makerFloor(wy / 32), layers[makerEd.layer]);
-    mkRect(0, y - 1, mkTextWidth(text, size) + 10, 13, 0x00000090);
-    mkText(5, y, text, size, 0xd8e4f0ff);
+    // Without room beside the brush buttons the status line drops below them.
+    float by = y, tw = mkTextWidth(text, size) + 12;
+    if (tw + 8 > right - buttonsW)
+        y -= 16;
+    mkHudPlate(mkBox(2, y - 1, tw, 13));
+    mkText(8, y, text, size, 0xffffffff);
     // Problems that would stop a clear check, listed under the status line.
     const MakerLevel &level = makerEd.level;
     int goals = 0;
@@ -2584,26 +2681,42 @@ void edStatus() {
     if (makerEd.entityCost > MAX_ENTITIES - 160)
         warnings[warningCount++] = "Too many objects - the last ones will not appear";
     for (int i = 0; i < warningCount; i++) {
-        float wy = y - 14 * (i + 1);
-        mkRect(0, wy - 1, mkTextWidth(warnings[i], size, true) + 10, 13, 0x500000c0);
-        mkText(5, wy, warnings[i], size, 0xff9080ff, true);
+        float wy = y - 15 * (i + 1);
+        mkHudPlate(mkBox(2, wy - 1, mkTextWidth(warnings[i], size, true) + 12, 13));
+        mkText(8, wy, warnings[i], size, 0xff7060ff, true);
     }
     if (!brush)
         return;
     float x = right;
     for (int i = 0; i < 4; i++) {
-        float w = mkTextWidth(labels[i], size) + 8;
+        float w = mkButtonWidth(labels[i], buttonSize, pad);
         x -= w;
-        MakerButton *b = bt.add(mkBox(x, y - 1, w, 13), ids[i], labels[i], 0,
+        MakerButton *b = bt.add(mkBox(x, by - 2, w, 14), ids[i], labels[i], 0,
                                 ids[i] == CMD_BRUSH_TRIM && makerEd.brush.trim > 0,
                                 ids[i] == CMD_BRUSH_TRIM && !edBrushTrimmable(makerEd.brush));
-        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+        mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, buttonSize);
         x -= 2;
     }
-    float w = mkTextWidth(coll, size) + 8;
+    float w = mkButtonWidth(coll, buttonSize, pad);
     x -= w;
-    MakerButton *b = bt.add(mkBox(x, y - 1, w, 13), CMD_BRUSH_COLLIDE, coll);
-    mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+    MakerButton *b = bt.add(mkBox(x, by - 2, w, 14), CMD_BRUSH_COLLIDE, coll);
+    mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, buttonSize);
+}
+
+// A value between the game's round arrows, on a black capsule like the pause captions.
+void edStepper(float l, float r, float y, float h, int decId, int decArg, int incId, int incArg,
+               const char *value, u32 color) {
+    MakerButtons &bt = makerEd.buttons;
+    MakerButton *dec = bt.add(mkBox(l, y, h, h), decId, 0, decArg);
+    mkDrawArrow(*dec, true, makerEd.mouseX, makerEd.mouseY);
+    MakerButton *inc = bt.add(mkBox(r - h, y, h, h), incId, 0, incArg);
+    mkDrawArrow(*inc, false, makerEd.mouseX, makerEd.mouseY);
+    Rect pill = {l + h + 2, y + 1, r - h - 2, y + h - 1};
+    mkPill(pill);
+    char shown[48];
+    float size = clamp(h * 0.6f, 6.5f, 8);
+    mkFitText(shown, sizeof(shown), value, pill.r - pill.l - 8, size, true);
+    mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, shown, size, color, true);
 }
 
 void edPropertyPanel() {
@@ -2622,51 +2735,54 @@ void edPropertyPanel() {
         return;
     }
     float w = makerEd.propsW, x = viewW - w, top = edCanvasTop() - 2, bottom = edCanvasBottom() + 2;
-    mkPanel(x, bottom, w - 2, top - bottom);
+    mkDarkPanel(mkBox(x, bottom, w - 2, top - bottom), 0.75f);
     bt.add(mkBox(x, bottom, w - 2, top - bottom), CMD_BACKDROP, 0, 1);
-    float y = top - 16, size = 8.5f;
-    mkText(x + 6, y, d->name, 10, 0xfff2b0ff, true);
-    MakerButton *close = bt.add(mkBox(x + w - 20, y - 1, 15, 14), CMD_PROP_CLOSE, "x");
-    mkDrawButton(*close, makerEd.mouseX, makerEd.mouseY, size);
+    float y = top - 20, size = 8.5f;
+    char title[64];
+    mkFitText(title, sizeof(title), d->name, w - 36, 10, true);
+    mkText(x + 8, y, title, 10, 0xffee33ff, true);
+    MakerButton *close = bt.add(mkBox(x + w - 24, y - 3, 18, 18), CMD_PROP_CLOSE, 0);
+    mkDrawIcon(*close, MKART_CLOSE, makerEd.mouseX, makerEd.mouseY);
     y -= 12;
-    int hintLines = mkTextWrapped(x + 6, y, d->hint, 7.5f, 0x9fb4c8ff, w - 14, 10, 2);
+    int hintLines = mkTextWrapped(x + 8, y, d->hint, 7.5f, 0xb8c4d0ff, w - 18, 10, 2);
     y -= 8 + hintLines * 10;
-    // One row per value: label on the left, "< value >" on the right; the wheel works over the row.
-    // Only settings the object's class supports are listed, and rows tighten to fit them all.
-    float minusX = x + w - 114, plusX = x + w - 24, valueX = (minusX + 16 + plusX) * 0.5f,
-          labelW = w - 120;
+    // One row per value: label on the left, the value between arrows on the right; the wheel
+    // works over the row. Only settings the object's class supports are listed, and rows
+    // tighten to fit them all.
+    float stepL = x + w - clamp(w * 0.55f, 80, 118), stepR = x + w - 8, arrow = 14,
+          labelW = stepL - x - 12;
     int rows = (d->flags & OBJ_RESIZE_X ? 1 : 0) + (d->flags & OBJ_RESIZE_Y ? 1 : 0) +
                (d->flags & OBJ_ROTATE ? 1 : 0);
     for (int i = 0; i < d->paramCount; i++)
         rows += makerParamUsable(*d, i);
-    float rowH = rows ? clamp((y - (bottom + 26)) / rows, 13, 17) : 17;
-    char value[48], shown[48], label[40];
+    float rowH = rows ? clamp((y - (bottom + 28)) / rows, 14, 18) : 18;
+    char value[48], label[40];
     if (d->flags & (OBJ_RESIZE_X | OBJ_RESIZE_Y)) {
         float cw = d->cellW > 0 ? d->cellW : 16, ch = d->cellH > 0 ? d->cellH : 16;
         for (int axis = 0; axis < 2; axis++) {
             if (!(d->flags & (axis ? OBJ_RESIZE_Y : OBJ_RESIZE_X)))
                 continue;
-            bt.add(mkBox(x + 2, y - 3, w - 6, rowH), CMD_WHEEL, 0, 2000 + axis);
-            mkText(x + 6, y, axis ? "Height" : "Width", size, 0xd8e4f0ff);
+            bt.add(mkBox(x + 4, y - 3, w - 10, rowH), CMD_WHEEL, 0, 2000 + axis);
+            mkText(x + 8, y, axis ? "Height" : "Width", size, 0xffffffff);
             wsprintfA(value, "%d", makerRound((axis ? o.h : o.w) / (axis ? ch : cw)));
-            MakerButton *minus = bt.add(mkBox(minusX, y - 2, 16, 14), CMD_PROP_SIZE, "-", axis * 2);
-            mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
-            mkTextCentered(valueX, y + 5, value, 8, 0xffffffff, true);
-            MakerButton *plus =
-                bt.add(mkBox(plusX, y - 2, 16, 14), CMD_PROP_SIZE, "+", axis * 2 + 1);
-            mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
+            edStepper(stepL, stepR, y - 3, arrow, CMD_PROP_SIZE, axis * 2, CMD_PROP_SIZE,
+                      axis * 2 + 1, value, 0xffffffff);
             y -= rowH;
         }
     }
     if (d->flags & OBJ_ROTATE) {
-        mkText(x + 6, y, "Rotation", size, 0xd8e4f0ff);
+        mkText(x + 8, y, "Rotation", size, 0xffffffff);
         wsprintfA(value, "%d deg", makerRound(o.angle));
-        mkTextCentered(valueX, y + 5, value, 8, 0xffffffff, true);
-        MakerButton *rotate = bt.add(mkBox(plusX - 12, y - 2, 28, 14), CMD_PROP_ROTATE, "Turn");
+        Rect pill = {stepL + arrow + 2, y - 2, stepR - 36, y + arrow - 4};
+        mkPill(pill);
+        mkTextCentered((pill.l + pill.r) * 0.5f, (pill.b + pill.t) * 0.5f, value, 8, 0xffffffff,
+                       true);
+        MakerButton *rotate = bt.add(mkBox(stepR - 32, y - 3, 32, arrow), CMD_PROP_ROTATE, "Turn");
         mkDrawButton(*rotate, makerEd.mouseX, makerEd.mouseY, 7.5f);
         y -= rowH;
     }
-    for (int i = 0; i < d->paramCount && y > bottom + 24; i++) {
+    float deleteBottom = bottom + edPanelPadding() + 3;
+    for (int i = 0; i < d->paramCount && y > deleteBottom + 23; i++) {
         if (!makerParamUsable(*d, i))
             continue;
         const MakerParamDef &p = d->params[i];
@@ -2682,34 +2798,29 @@ void edPropertyPanel() {
             }
         } else if (!makerChoiceLabel(p.choices, makerRound(v), value, sizeof(value)))
             mkFormat(value, v, 0);
-        bt.add(mkBox(x + 2, y - 3, w - 6, rowH), CMD_WHEEL, 0, 1000 + i);
+        bt.add(mkBox(x + 4, y - 3, w - 10, rowH), CMD_WHEEL, 0, 1000 + i);
         mkFitText(label, sizeof(label), p.label, labelW, size, false);
-        mkText(x + 6, y, label, size, (o.setMask & (1u << i)) ? 0xffffffff : 0xb8c8d8ff);
-        MakerButton *minus = bt.add(mkBox(minusX, y - 2, 16, 14), CMD_PROP_DEC, "<", i);
-        mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
-        mkFitText(shown, sizeof(shown), value, plusX - minusX - 20, 8, true);
-        mkTextCentered(valueX, y + 5, shown, 8, 0xfff2b0ff, true);
-        MakerButton *plus = bt.add(mkBox(plusX, y - 2, 16, 14), CMD_PROP_INC, ">", i);
-        mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
+        // Values still at their default are dimmed.
+        mkText(x + 8, y, label, size, (o.setMask & (1u << i)) ? 0xffffffff : 0xa8b4c0ff);
+        edStepper(stepL, stepR, y - 3, arrow, CMD_PROP_DEC, i, CMD_PROP_INC, i, value, 0xffee33ff);
         y -= rowH;
     }
-    MakerButton *del = bt.add(mkBox(x + 6, bottom + 6, w - 16, 16), CMD_PROP_DELETE, "Delete");
-    mkDrawButton(*del, makerEd.mouseX, makerEd.mouseY, size);
+    MakerButton *del = bt.add(mkBox(x + 8, deleteBottom, w - 20, 17), CMD_PROP_DELETE, "Delete");
+    mkDrawButton(*del, makerEd.mouseX, makerEd.mouseY, size, 0xc80f0fff);
 }
 
 void edSettingsPanel() {
     MakerButtons &bt = makerEd.buttons;
     MakerHeader &h = makerEd.level.head;
     bt.add(mkBox(0, 0, viewW, viewH), CMD_BACKDROP, 0, 0);
-    mkRect(0, 0, viewW, viewH, 0x00000080);
+    mkShade(0.8f);
     const int rowCount = 16;
-    float w = minf(360, viewW - 20), rowH = minf(19, (viewH - 70) / (rowCount + 1));
-    float ph = rowH * (rowCount + 1) + 30, x = (viewW - w) * 0.5f, y = (viewH - ph) * 0.5f;
-    mkPanel(x, y, w, ph);
+    float w = minf(360, viewW - 20), rowH = minf(18, (viewH - 76) / (rowCount + 1));
+    float ph = rowH * (rowCount + 1) + 34, x = (viewW - w) * 0.5f, y = (viewH - ph) * 0.5f - 4;
+    mkGreenPanel(mkBox(x, y, w, ph));
     bt.add(mkBox(x, y, w, ph), CMD_BACKDROP, 0, 1);
-    float size = 9, row = y + ph - 22;
-    mkTextCentered(x + w * 0.5f, row + 8, "Course Settings", 11, 0xfff2b0ff, true);
-    row -= rowH + 2;
+    float size = clamp(rowH * 0.6f, 6.5f, 9), row = y + ph - 28;
+    mkPanelTitle(x + w * 0.5f, y + ph, "Course Settings");
     char value[80];
 
     struct Row {
@@ -2734,8 +2845,9 @@ void edSettingsPanel() {
                         {"Camera ahead", CMD_SET_AHEAD_X},
                         {"Camera up", CMD_SET_AHEAD_Y}};
     for (int i = 0; i < rowCount; i++) {
-        mkText(x + 10, row + 3, rows[i].label, size, 0xd8e4f0ff);
-        float vx = x + 100, vw = w - 110;
+        float bh = rowH - 3, vx = x + 108, vw = w - 122;
+        mkText(x + 14, row + (bh - mkLineHeight(size, true)) * 0.5f, rows[i].label, size,
+               0x000000ff, true);
         switch (rows[i].id) {
         case CMD_SET_NAME:
             wsprintfA(value, "%s%s", h.name,
@@ -2798,36 +2910,39 @@ void edSettingsPanel() {
         }
         }
         if (rows[i].id == CMD_SET_NAME) {
-            MakerButton *b =
-                bt.add(mkBox(vx, row, vw, rowH - 3), CMD_SET_NAME, 0, 0, makerEd.nameEditing);
-            mkRect(vx, row, vw, rowH - 3, makerEd.nameEditing ? 0x0b2a46ff : 0x0d141cff);
-            mkFrame(vx, row, vw, rowH - 3, makerEd.nameEditing ? 0xffe070ff : 0x3a4d63ff);
-            mkText(vx + 5, row + 2, value, size, 0xffffffff);
-            (void)b;
+            // The name is typed into a score box.
+            Rect field = mkBox(vx, row, vw, bh);
+            bt.add(field, CMD_SET_NAME, 0, 0, makerEd.nameEditing);
+            mkInset(field);
+            mkText(vx + 6, row + (bh - mkLineHeight(size)) * 0.5f, value, size, 0xffffffff);
+            if (makerEd.nameEditing)
+                mkBrackets(Rect{field.l - 2, field.b - 2, field.r + 2, field.t + 2}, 5);
         } else {
-            bt.add(mkBox(x + 4, row - 1, w - 8, rowH - 1), CMD_WHEEL, 0, rows[i].id);
-            MakerButton *minus = bt.add(mkBox(vx, row, 18, rowH - 3), rows[i].id, "<", -1);
-            mkDrawButton(*minus, makerEd.mouseX, makerEd.mouseY, size);
-            mkTextCentered(vx + vw * 0.5f, row + (rowH - 3) * 0.5f, value, size, 0xfff2b0ff, true);
-            MakerButton *plus = bt.add(mkBox(vx + vw - 18, row, 18, rowH - 3), rows[i].id, ">", 1);
-            mkDrawButton(*plus, makerEd.mouseX, makerEd.mouseY, size);
+            bt.add(mkBox(x + 6, row - 1, w - 12, rowH - 1), CMD_WHEEL, 0, rows[i].id);
+            edStepper(vx, vx + vw, row, bh, rows[i].id, -1, rows[i].id, 1, value, 0xffee33ff);
         }
         row -= rowH;
     }
-    MakerButton *done = bt.add(mkBox(x + w * 0.5f - 40, y + 6, 80, 17), CMD_SET_DONE, "Done");
+    float doneBottom = y + 16 * mkPixelScale(.5f) + 4;
+    MakerButton *done = bt.add(mkBox(x + w * 0.5f - 40, doneBottom, 80, 18), CMD_SET_DONE, "Done");
     mkDrawButton(*done, makerEd.mouseX, makerEd.mouseY, size);
 }
 
 void edPicker() {
     MakerButtons &bt = makerEd.buttons;
     bt.add(mkBox(0, 0, viewW, viewH), CMD_BACKDROP, 0, 0);
-    mkRect(0, 0, viewW, viewH, 0x00000090);
+    mkShade(0.6f);
     float margin = 12, x = margin, y = margin, w = viewW - margin * 2, h = viewH - margin * 2;
-    mkPanel(x, y, w, h);
+    mkDarkPanel(mkBox(x, y, w, h), 1.6f);
     bt.add(mkBox(x, y, w, h), CMD_BACKDROP, 0, 1);
-    float size = 8.5f, tabH = 16, tx = x + 6, ty = y + h - tabH - 6;
+    float inset = edPanelPadding() + 3, gap = 5;
+    float size = 8.5f, tabH = 16, tx = x + inset, ty = y + h - tabH - inset;
     for (int t = 0; t < TAB_COUNT; t++) {
-        float tw = mkTextWidth(makerTabNames[t], size, makerEd.tab == t) + 10;
+        float tw = mkButtonWidth(makerTabNames[t], size);
+        if (tx + tw > x + w - inset) {
+            tx = x + inset;
+            ty -= tabH + gap;
+        }
         MakerButton *b =
             bt.add(mkBox(tx, ty, tw, tabH), CMD_TAB, makerTabNames[t], t, makerEd.tab == t);
         mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
@@ -2836,20 +2951,27 @@ void edPicker() {
     if (edPieceTab(makerEd.tab)) {
         const char *worlds[6] = {"All worlds", "Grasslands", "Crystal",
                                  "Sky Ruins",  "Desert",     "Wizard"};
-        float wx = x + 6, wy = ty - tabH - 4;
+        float wx = x + inset, wy = ty - tabH - gap;
         for (int i = 0; i < 6; i++) {
-            float ww = mkTextWidth(worlds[i], size) + 10;
+            float ww = mkButtonWidth(worlds[i], size);
+            if (wx + ww > x + w - inset) {
+                wx = x + inset;
+                wy -= tabH + gap;
+            }
             MakerButton *b =
                 bt.add(mkBox(wx, wy, ww, tabH), CMD_WORLD, worlds[i], i, makerEd.world == i);
-            mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
-            wx += ww + 2;
+            if (i)
+                edWorldButton(*b, size);
+            else
+                mkDrawButton(*b, makerEd.mouseX, makerEd.mouseY, size);
+            wx += ww + 3;
         }
         ty = wy;
     }
     edBuildPalette();
-    float cell = 44, gx = x + 8, gy = ty - 6;
-    int columns = (int)((w - 16) / (cell + 3));
-    int rows = (int)((gy - (y + 8)) / (cell + 3));
+    float cell = 44, gx = x + inset, gy = ty - 7;
+    int columns = (int)((w - inset * 2 + 3) / (cell + 3));
+    int rows = (int)((gy - (y + 20)) / (cell + 3));
     if (columns < 1)
         columns = 1;
     if (rows < 1)
@@ -2867,23 +2989,14 @@ void edPicker() {
             bool hover = mkInside(box, makerEd.mouseX, makerEd.mouseY);
             if (hover)
                 hovered = index;
-            mkRect(box.l, box.b, cell, cell, hover ? 0x34506eff : 0x0d141cff);
-            mkFrame(box.l, box.b, cell, cell, 0x3a4d63ff);
-            Rect inner = {box.l + 3, box.b + 3, box.r - 3, box.t - 3};
-            MakerPaletteItem item = makerEd.palette[index];
-            if (item.kind == 0)
-                edDrawPieceIcon(makerPieces[item.index], inner);
-            else if (item.kind == 1)
-                edDrawDefIcon(item.index, inner, makerEd.age);
-            else
-                edDrawBrushIcon(makerEd.recent[item.index], inner, makerEd.age);
+            edSlot(box, makerEd.palette[index], edCurrentItem(makerEd.palette[index]), hover);
             bt.add(box, CMD_ITEM, 0, index);
         }
     if (totalRows > rows) {
         char text[32];
         wsprintfA(text, "Rows %d-%d of %d (wheel)", makerEd.pickerScroll + 1,
                   makerEd.pickerScroll + rows, totalRows);
-        mkText(x + w - mkTextWidth(text, 8) - 8, y + 4, text, 8, 0x8fa3b8ff);
+        mkText(x + w - mkTextWidth(text, 8) - 10, y + 7, text, 8, 0xb8c4d0ff);
     }
     if (hovered >= 0) {
         char label[96];
@@ -2901,17 +3014,18 @@ void edPicker() {
                       makerObjectDefs[item.index].hint);
         else
             lstrcpyA(label, "Recent brush");
-        mkText(x + 8, y + 4, label, 8.5f, 0xffffffff);
+        mkText(x + 10, y + 7, label, 8.5f, 0xffffffff);
     }
 }
 
 void edHelp() {
     MakerButtons &bt = makerEd.buttons;
     bt.add(mkBox(0, 0, viewW, viewH), CMD_HELP, 0);
-    mkRect(0, 0, viewW, viewH, 0x000000b0);
+    mkShade(0.85f);
     const char *lines[] = {
         "Left drag: paint / place      Right drag: erase      Middle drag or Space: pan",
         "Shift + drag: fill a rectangle; a Fill stretches over it (sizes gems, water...)",
+        "Eraser + Shift + drag: remove the boxed tiles and items (one undo)",
         "Drag items to move them; move areas (water, wind...) by their frame or name tag",
         "Alt + click or Q: pick the brick or item under the cursor",
         "Double-click an item: edit it (speed, interval, range...); the wheel steps values",
@@ -2931,16 +3045,17 @@ void edHelp() {
         w = 0;
         for (int i = 0; i < n; i++)
             w = maxf(w, mkTextWidth(lines[i], size));
-        if (w <= viewW - 30 || size <= 6.5f)
+        if (w <= viewW - 40 || size <= 6.5f)
             break;
         size -= 0.5f;
     }
     float x = (viewW - w) * 0.5f, y = viewH * 0.5f + n * lh * 0.5f;
-    mkPanel(x - 10, y - n * lh - 30, w + 20, n * lh + 46);
-    mkTextCentered(viewW * 0.5f, y + 4, "Course Maker Controls", 11, 0xfff2b0ff, true);
+    Rect panel = {x - 14, y - n * lh - 36, x + w + 14, y + 18};
+    mkDarkPanel(panel, 1.6f);
+    mkPanelTitle(viewW * 0.5f, panel.t, "Course Maker Controls");
     for (int i = 0; i < n; i++)
-        mkText(x, y - (i + 1) * lh - 6, lines[i], size, 0xe8f0f8ff);
-    mkTextCentered(viewW * 0.5f, y - n * lh - 22, "Click or press any key to close", 8, 0x8fa3b8ff);
+        mkText(x, y - (i + 1) * lh - 2, lines[i], size, 0xffffffff);
+    mkTextCentered(viewW * 0.5f, y - n * lh - 20, "Click or press any key to close", 8, 0xb8c4d0ff);
 }
 
 // Shortcut hints shown after hovering a toolbar or brush button for a moment.
@@ -2950,7 +3065,7 @@ const char *edTooltipText(int id, int arg) {
         return "Test from the start (Enter)  -  Shift+Enter tests from the cursor";
     case CMD_TOOL:
         return arg == TOOL_PEN      ? "Pen (P): paint bricks, place items, drag items to move them"
-               : arg == TOOL_ERASE  ? "Eraser (E): the right mouse button erases with any tool"
+               : arg == TOOL_ERASE  ? "Eraser (E): Shift+drag box-erases; right drag erases with any tool"
                : arg == TOOL_SELECT ? "Select (S): box-select, then drag, copy (Ctrl+C) or delete"
                                     : "Hand (H): pan the view; middle drag or Space+drag also pan";
     case CMD_LAYER:
@@ -3007,31 +3122,29 @@ void edTooltip() {
     const char *text = b ? edTooltipText(id, arg) : 0;
     if (!text || makerEd.hoverTime < 0.5f)
         return;
-    float size = 8, w = mkTextWidth(text, size) + 10, h = 14;
-    float x = clamp(makerEd.mouseX - w * 0.5f, 2, viewW - w - 2), y = b->r.b - h - 3;
+    float h = mkLineHeight(8) + 5, y = b->r.b - h - 3;
     if (y < 2)
         y = b->r.t + 3;
-    mkRect(x, y, w, h, 0x000000e0);
-    mkFrame(x, y, w, h, 0x6c8db5ff);
-    mkText(x + 5, y + (h - mkLineHeight(size)) * 0.5f, text, size, 0xffffffff);
+    edCaption(makerEd.mouseX, y, text, 8);
 }
 
 void edRender() {
     makerEd.buttons.clear();
-    makerEd.toolbarH = 22;
-    makerEd.paletteH = viewH < 300 ? 52 : 60;
+    MakerToolbar toolbar;
+    edToolbarLayout(toolbar);
+    makerEd.toolbarH = edToolRowHeight() * toolbar.rows;
+    makerEd.paletteH = (viewH < 300 ? 52 : 60) + edPanelPadding() - 2;
     makerEd.propsW = minf(196, viewW * 0.38f);
     if (makerEd.loading || !makerCatalogReady) {
-        mkGradient(0, 0, viewW, viewH, 0x0d1520ff, 0x24384fff);
-        mkTextCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff,
-                       true);
+        mkSky(makerEd.age);
+        mkLabelCentered(viewW * 0.5f, viewH * 0.5f, "Loading the course maker...", 12, 0xffffffff);
         return;
     }
     edDrawCanvas();
     edStatus();
     edPropertyPanel();
     edPaletteBar();
-    edToolbar();
+    edToolbar(toolbar);
     if (makerEd.picker)
         edPicker();
     if (makerEd.settings)
@@ -3460,7 +3573,7 @@ void edMouseDown(float x, float y, int button) {
     bool select = makerEd.tool == TOOL_SELECT, shift = mkKeyDown(VK_SHIFT),
          ctrl = mkKeyDown(VK_CONTROL);
     int object = edGrabAt(wx, wy);
-    if (doubleClick && !shift && !ctrl) {
+    if (doubleClick && !shift && !ctrl && makerEd.tool != TOOL_ERASE) {
         // Select also opens an area from its interior; the pen keeps painting there.
         int target = object >= 0 || !select ? object : edObjectAt(wx, wy, true);
         if (target >= 0) {
@@ -3475,6 +3588,10 @@ void edMouseDown(float x, float y, int button) {
         return;
     }
     if (makerEd.tool == TOOL_ERASE) {
+        if (shift) {
+            makerEd.drag = DRAG_ERASE_RECT;
+            return;
+        }
         edBeginGroup();
         makerEd.drag = DRAG_ERASE;
         makerEd.eraseMode = -1;
@@ -3553,6 +3670,10 @@ void edMouseUp(float x, float y, int button) {
     float wx = edWorldX(x), wy = edWorldY(y);
     MakerLevel &l = makerEd.level;
     switch (drag) {
+    case DRAG_ERASE_RECT:
+        edSelectRect(edDragRect(makerEd.dragWorldX, makerEd.dragWorldY, wx, wy), false);
+        edDeleteSelection();
+        break;
     case DRAG_RECT:
         edFillRect(edDragRect(makerEd.dragWorldX, makerEd.dragWorldY, wx, wy));
         makerEd.entityCost = edEntityCost();
